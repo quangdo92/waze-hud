@@ -741,11 +741,17 @@ void HudRenderer::renderSystemStatus(Canvas &canvas, const Rect &region,
                     assets::kTextMedium, bluetoothColor, 210, false);
 }
 
+#ifndef WAZE_HUD_FIRMWARE_VERSION
+#define WAZE_HUD_FIRMWARE_VERSION "2.8"
+#endif
+
 void HudRenderer::renderStatus(Canvas &canvas, const Rect &region, const HudState &state, const DeviceSettings &settings) {
     canvas.clear(colors::Background);
     constexpr int copyX = 0;
     constexpr int copyWidth = layout::Width;
-    canvas.fontText(copyX - region.x, screenY(34) - region.y, "WazeHUD", assets::kTextLarge,
+    char title[32];
+    std::snprintf(title, sizeof(title), "WazeHUD v%s", WAZE_HUD_FIRMWARE_VERSION);
+    canvas.fontText(copyX - region.x, screenY(34) - region.y, title, assets::kTextLarge,
                     colors::Foreground, copyWidth, true);
     const char *status = state.signalStale ? "Mất tín hiệu" : state.connected ? "Đã kết nối" : "Đang chờ thiết bị";
     const uint16_t statusColor = state.signalStale ? colors::Amber : state.connected ? colors::Green : colors::Muted;
