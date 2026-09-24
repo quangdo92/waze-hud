@@ -1,12 +1,12 @@
 # Tổng quan nhanh dự án WazeHUD
 
-> Cập nhật: 2026-09-07 · Branch hiện tại: `2.8-in-CYD` (CYD mặc định) · ESP-IDF 5.5.5
+> Cập nhật: 2026-09-24 · Branch hiện tại: `CYD2.82USB` (CYD mặc định) · ESP-IDF 5.5.5
 
 WazeHUD là firmware ESP32 nhận dữ liệu dẫn đường Waze qua BLE/HLP/1 và hiển thị HUD ô tô có độ trễ thấp. Mã nguồn ứng dụng nằm trong `waze-hud/`; assets gốc nằm trong `assets/` và được chuyển thành dữ liệu nhúng để ESP32 không phải giải mã PNG/font khi chạy.
 
 ## Trạng thái quan trọng
 
-- Branch `2.8-in-CYD` dành riêng cho ESP32-2432S028 và build mặc định cho target `esp32`.
+- Branch `CYD2.82USB` dành riêng cho ESP32-2432S028 và build mặc định cho target `esp32`.
 - Backend CYD dùng ILI9341, SPI2 40 MHz, BGR, `INVON` và xoay dirty stripe từ landscape native 320×240 sang panel native 240×320; font/icon giữ tỉ lệ pixel 1:1.
 - Board có flash 4 MB, không PSRAM; partition table mặc định đã thu về hai OTA slot 1856 KiB.
 - Build phần mềm đã thành công; màu, orientation, BLE và độ ổn định vẫn cần xác nhận trên phần cứng.
