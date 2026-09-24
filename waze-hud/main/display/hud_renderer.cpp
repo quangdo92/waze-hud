@@ -351,14 +351,19 @@ void drawTrafficSeverityTicks(Canvas &canvas, int centerX, int y,
 
 void drawAlertIcon(Canvas &canvas, int cx, int cy, int radius, const AlertState &alert, bool dominant) {
     if (alert.kind == AlertKind::None) return;
+    const int iconSize = radius * 2;
     if (alert.kind == AlertKind::SpeedDrop) {
         const assets::ColorBitmap *sign = speedLimitAsset(
             alert.valueKmh, dominant ? SpeedSignContext::AlertLarge : SpeedSignContext::AlertSmall);
         if (sign && sign->pixels && sign->alpha) {
-            canvas.colorBitmap(cx - sign->width / 2, cy - sign->height / 2, *sign);
+            if (dominant) {
+                canvas.colorBitmapScaled(cx - iconSize / 2, cy - iconSize / 2, *sign, iconSize);
+            } else {
+                canvas.colorBitmap(cx - sign->width / 2, cy - sign->height / 2, *sign);
+            }
             return;
         }
-        const int thick = dominant ? 3 : 2;
+        const int thick = dominant ? 4 : 2;
         char value[5]{};
         canvas.fillCircle(cx,cy,radius,colors::White);
         canvas.circle(cx,cy,radius,colors::Red,thick);
@@ -381,7 +386,11 @@ void drawAlertIcon(Canvas &canvas, int cx, int cy, int radius, const AlertState 
         ? trafficJamAsset(alert.trafficSeverity, dominant) : alertAsset(alert.kind, dominant);
     if (!bitmap) bitmap = alertAsset(AlertKind::Hazard, dominant);
     if (bitmap && bitmap->pixels && bitmap->alpha) {
-        canvas.colorBitmap(cx - bitmap->width / 2, cy - bitmap->height / 2, *bitmap);
+        if (dominant) {
+            canvas.colorBitmapScaled(cx - iconSize / 2, cy - iconSize / 2, *bitmap, iconSize);
+        } else {
+            canvas.colorBitmap(cx - bitmap->width / 2, cy - bitmap->height / 2, *bitmap);
+        }
         if (trafficJam && !dominant)
             drawTrafficSeverityTicks(canvas, cx, cy + radius + 3,
                                      alert.trafficSeverity, severityColor);
@@ -758,9 +767,9 @@ void HudRenderer::renderLimitPrimary(Canvas &canvas, const HudState &state,
                         limit, assets::kNumberLarge, colors::Black,
                         innerRadius * 2, true);
     } else if (assets::kNoSpeedCurrent.pixels && assets::kNoSpeedCurrent.alpha) {
-        canvas.colorBitmap(signX - assets::kNoSpeedCurrent.width / 2,
-                           signY - assets::kNoSpeedCurrent.height / 2,
-                           assets::kNoSpeedCurrent);
+        canvas.colorBitmapScaled(signX - outerRadius,
+                                 signY - outerRadius,
+                                 assets::kNoSpeedCurrent, outerRadius * 2);
     }
 
     char speed[5];
@@ -773,27 +782,28 @@ void HudRenderer::renderLimitPrimary(Canvas &canvas, const HudState &state,
 
 void HudRenderer::renderLimits(Canvas &canvas, const HudState &state, const DeviceSettings &) {
     canvas.clear(colors::Panel);
+    const int centerY = state.hasMinimumSpeed ? mainY(48) : 52;
     if (state.speedLimitKmh > 0) {
         const assets::ColorBitmap *sign = speedLimitAsset(state.speedLimitKmh, SpeedSignContext::Current);
         if (sign && sign->pixels && sign->alpha) {
-            canvas.colorBitmap(30 - sign->width / 2, mainY(48) - sign->height / 2, *sign);
+            canvas.colorBitmap(30 - sign->width / 2, centerY - sign->height / 2, *sign);
         } else {
-            canvas.fillCircle(30,mainY(48),30,colors::White);
-            canvas.circle(30,mainY(48),30,colors::Red,6);
-            char value[5]; std::snprintf(value,sizeof(value),"%d",state.speedLimitKmh);
-            canvas.fontText(0,mainY(48)-assets::kNumberMedium.lineHeight/2,value,
-                            assets::kNumberMedium,colors::Black,60,true);
+            canvas.fillCircle(30, centerY, 30, colors::White);
+            canvas.circle(30, centerY, 30, colors::Red, 5);
+            char value[5]; std::snprintf(value, sizeof(value), "%d", state.speedLimitKmh);
+            canvas.fontText(0, centerY - assets::kNumberMedium.lineHeight / 2, value,
+                            assets::kNumberMedium, colors::Black, 60, true);
         }
     } else if (assets::kNoSpeedCurrent.pixels && assets::kNoSpeedCurrent.alpha) {
         canvas.colorBitmap(30 - assets::kNoSpeedCurrent.width / 2,
-                           mainY(48) - assets::kNoSpeedCurrent.height / 2,
+                           centerY - assets::kNoSpeedCurrent.height / 2,
                            assets::kNoSpeedCurrent);
     }
     if (state.hasMinimumSpeed) {
-        canvas.fillCircle(42,mainY(101),17,colors::Blue);
-        char value[5]; std::snprintf(value,sizeof(value),"%d",state.minimumSpeedKmh);
-        canvas.fontText(25,mainY(101)-assets::kNumberSmall.lineHeight/2,value,
-                        assets::kNumberSmall,colors::White,34,true);
+        canvas.fillCircle(42, mainY(101), 17, colors::Blue);
+        char value[5]; std::snprintf(value, sizeof(value), "%d", state.minimumSpeedKmh);
+        canvas.fontText(25, mainY(101) - assets::kNumberSmall.lineHeight / 2, value,
+                        assets::kNumberSmall, colors::White, 34, true);
     }
 }
 
@@ -806,11 +816,41 @@ void HudRenderer::renderAlerts(Canvas &canvas, const HudState &state, const Devi
         primary.distanceM = state.noPassingRemainingM;
         primary.valueKmh = 0;
     }
+
+    bool hasSecondary = false;
+    AlertState upcoming{};
+    if (activeZone) {
+        upcoming = state.nearestAlert;
+        if (upcoming.kind == AlertKind::NoPassing) upcoming = {};
+        for (uint8_t index = 0; upcoming.kind == AlertKind::None &&
+                                index < state.upcomingAlertCount; ++index) {
+            if (state.upcomingAlerts[index].kind != AlertKind::NoPassing)
+                upcoming = state.upcomingAlerts[index];
+        }
+        hasSecondary = (upcoming.kind != AlertKind::None && !(upcoming == primary));
+    } else {
+        hasSecondary = (state.upcomingAlertCount > 0);
+    }
+
     if (primary.kind != AlertKind::None) {
-        drawAlertIcon(canvas,47,mainY(34),22,primary,true);
-        char distance[16]; formatDistance(primary.distanceM,distance,sizeof(distance));
-        canvas.fontText(2,mainY(60),distance,assets::kTextSmall,
-                        alertDistanceColor(primary.distanceM, foreground(settings)),91,true);
+#if CONFIG_WAZE_HUD_DISPLAY_CYD_28
+        const int iconRadius = hasSecondary ? 28 : 30;
+        const int iconY = hasSecondary ? 32 : 36;
+        const int textY = hasSecondary ? 64 : 72;
+#else
+        const int iconRadius = 22;
+        const int iconY = mainY(34);
+        const int textY = mainY(60);
+#endif
+        drawAlertIcon(canvas, 47, iconY, iconRadius, primary, true);
+        char distance[16]; formatDistance(primary.distanceM, distance, sizeof(distance));
+#if CONFIG_WAZE_HUD_DISPLAY_CYD_28
+        canvas.fontText(2, textY, distance, assets::kTextMedium,
+                        alertDistanceColor(primary.distanceM, foreground(settings)), 91, true);
+#else
+        canvas.fontText(2, textY, distance, assets::kTextSmall,
+                        alertDistanceColor(primary.distanceM, foreground(settings)), 91, true);
+#endif
         if (primary.kind == AlertKind::TrafficJam) {
             char trafficDetail[48];
             if (primary.trafficDelayMinutes >= 0)
@@ -820,38 +860,50 @@ void HudRenderer::renderAlerts(Canvas &canvas, const HudState &state, const Devi
             else
                 std::snprintf(trafficDetail, sizeof(trafficDetail), "%.20s",
                               trafficSeverityLabel(primary.trafficSeverity));
-            canvas.fontText(1,mainY(78),trafficDetail,assets::kTextSmall,
-                            trafficSeverityColor(primary.trafficSeverity),93,true);
+#if CONFIG_WAZE_HUD_DISPLAY_CYD_28
+            const int trafficY = hasSecondary ? 88 : 96;
+            canvas.fontText(1, trafficY, trafficDetail, assets::kTextSmall,
+                            trafficSeverityColor(primary.trafficSeverity), 93, true);
+#else
+            canvas.fontText(1, mainY(78), trafficDetail, assets::kTextSmall,
+                            trafficSeverityColor(primary.trafficSeverity), 93, true);
+#endif
         }
     }
 
     if (activeZone) {
-        AlertState upcoming = state.nearestAlert;
-        if (upcoming.kind == AlertKind::NoPassing) upcoming = {};
-        for (uint8_t index = 0; upcoming.kind == AlertKind::None &&
-                                index < state.upcomingAlertCount; ++index) {
-            if (state.upcomingAlerts[index].kind != AlertKind::NoPassing)
-                upcoming = state.upcomingAlerts[index];
-        }
-        if (upcoming.kind != AlertKind::None && !(upcoming == primary)) {
-            drawAlertIcon(canvas,47,mainY(105),13,upcoming,false);
-            char distance[12]; formatDistance(upcoming.distanceM,distance,sizeof(distance));
-            canvas.fontText(24,mainY(121),distance,assets::kTextSmall,
-                            alertDistanceColor(upcoming.distanceM, colors::Muted),47,true);
+        if (hasSecondary) {
+#if CONFIG_WAZE_HUD_DISPLAY_CYD_28
+            constexpr int secondaryIconY = 112;
+            constexpr int secondaryTextY = 127;
+#else
+            const int secondaryIconY = mainY(105);
+            const int secondaryTextY = mainY(121);
+#endif
+            drawAlertIcon(canvas, 47, secondaryIconY, 13, upcoming, false);
+            char distance[12]; formatDistance(upcoming.distanceM, distance, sizeof(distance));
+            canvas.fontText(24, secondaryTextY, distance, assets::kTextSmall,
+                            alertDistanceColor(upcoming.distanceM, colors::Muted), 47, true);
         }
     } else {
-        const uint8_t count = std::min<uint8_t>(2,state.upcomingAlertCount);
+        const uint8_t count = std::min<uint8_t>(2, state.upcomingAlertCount);
+#if CONFIG_WAZE_HUD_DISPLAY_CYD_28
+        constexpr int secondaryIconY = 112;
+        constexpr int secondaryTextY = 127;
+#else
+        const int secondaryIconY = mainY(105);
+        const int secondaryTextY = mainY(121);
+#endif
         for (uint8_t index = 0; index < count; ++index) {
-            drawAlertIcon(canvas,20 + index * 48,mainY(105),13,
-                          state.upcomingAlerts[index],false);
+            drawAlertIcon(canvas, 20 + index * 48, secondaryIconY, 13,
+                          state.upcomingAlerts[index], false);
             char distance[12];
-            formatDistance(state.upcomingAlerts[index].distanceM,distance,sizeof(distance));
-            canvas.fontText(index * 48,mainY(121),distance,assets::kTextSmall,
+            formatDistance(state.upcomingAlerts[index].distanceM, distance, sizeof(distance));
+            canvas.fontText(index * 48, secondaryTextY, distance, assets::kTextSmall,
                             alertDistanceColor(state.upcomingAlerts[index].distanceM,
-                                               colors::Muted),47,true);
+                                               colors::Muted), 47, true);
         }
     }
-
 }
 
 void HudRenderer::renderGuidance(Canvas &canvas, const HudState &state,
