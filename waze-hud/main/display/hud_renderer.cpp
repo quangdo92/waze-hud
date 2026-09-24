@@ -655,36 +655,6 @@ void HudRenderer::renderMainIndicators(Canvas &canvas, const Rect &region,
         canvas.fontText(160 - region.x, mainY(0) - region.y, percent, assets::kTextSmall,
                         batteryColor, 38, false);
     }
-
-    if (sameRegion(region, layout::Alerts)) {
-        // Compact Bluetooth rune and four RSSI bars in the upper-right corner.
-        constexpr int bluetoothX = 303;
-        const int top = mainY(2);
-        const int bottom = mainY(14);
-        const uint16_t color = bleSignalColor(systemStatus);
-        canvas.line(bluetoothX - region.x, top - region.y,
-                    bluetoothX - region.x, bottom - region.y, color, 1);
-        canvas.line(bluetoothX - region.x, top - region.y,
-                    bluetoothX + 4 - region.x, mainY(6) - region.y, color, 1);
-        canvas.line(bluetoothX + 4 - region.x, mainY(6) - region.y,
-                    bluetoothX - 3 - region.x, mainY(12) - region.y, color, 1);
-        canvas.line(bluetoothX - 3 - region.x, mainY(5) - region.y,
-                    bluetoothX + 4 - region.x, mainY(11) - region.y, color, 1);
-        canvas.line(bluetoothX + 4 - region.x, mainY(11) - region.y,
-                    bluetoothX - region.x, bottom - region.y, color, 1);
-
-        int signalBars = 0;
-        if (systemStatus.bleConnected) {
-            signalBars = systemStatus.bleRssiDbm >= -60 ? 3 :
-                         systemStatus.bleRssiDbm >= -75 ? 2 :
-                         systemStatus.bleRssiDbm >= -90 ? 1 : 0;
-        }
-        for (int bar = 0; bar < 3; ++bar) {
-            const int height = 3 + bar * 3;
-            canvas.fillRect(310 + bar * 4 - region.x, mainY(14) - height - region.y,
-                            2, height, bar < signalBars ? color : colors::Muted);
-        }
-    }
 }
 
 void HudRenderer::renderSystemStatus(Canvas &canvas, const Rect &region,
@@ -773,9 +743,8 @@ void HudRenderer::renderSystemStatus(Canvas &canvas, const Rect &region,
 
 void HudRenderer::renderStatus(Canvas &canvas, const Rect &region, const HudState &state, const DeviceSettings &settings) {
     canvas.clear(colors::Background);
-    canvas.colorBitmap(16 - region.x, screenY(25) - region.y, assets::kBootIcon);
-    constexpr int copyX = 120;
-    constexpr int copyWidth = 190;
+    constexpr int copyX = 0;
+    constexpr int copyWidth = layout::Width;
     canvas.fontText(copyX - region.x, screenY(34) - region.y, "WazeHUD", assets::kTextLarge,
                     colors::Foreground, copyWidth, true);
     const char *status = state.signalStale ? "Mất tín hiệu" : state.connected ? "Đã kết nối" : "Đang chờ thiết bị";
