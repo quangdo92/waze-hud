@@ -206,8 +206,13 @@ void drawRoundaboutExit(Canvas &canvas, int exit, uint16_t color) {
     std::snprintf(number,sizeof(number),"%d",exit);
     constexpr int centerX = 42;
     constexpr int width = 36;
-    canvas.fontText(centerX-width/2,mainY(65)-assets::kNumberMedium.lineHeight/2,
-                    number,assets::kNumberMedium,color,width,true);
+#if CONFIG_WAZE_HUD_DISPLAY_CYD_28
+    constexpr int centerY = 46;
+#else
+    const int centerY = mainY(65);
+#endif
+    canvas.fontText(centerX-width/2, centerY - assets::kNumberMedium.lineHeight/2,
+                    number, assets::kNumberMedium, color, width, true);
 }
 
 enum class SpeedSignContext { Current, AlertLarge, AlertSmall };
@@ -227,12 +232,23 @@ const assets::ColorBitmap *speedLimitAsset(int value, SpeedSignContext context) 
 
 void drawManeuverIcon(Canvas &canvas, Maneuver maneuver, int exit, uint16_t color) {
     constexpr int cx = 42;
+#if CONFIG_WAZE_HUD_DISPLAY_CYD_28
+    constexpr int maneuverAssetY = 16;
+    constexpr int top = 20;
+    constexpr int bottom = 74;
+    constexpr int roundaboutCenterY = 46;
+    constexpr int junctionY = 51;
+#else
+    const int maneuverAssetY = mainY(34);
     const int top = mainY(38);
     const int bottom = mainY(92);
+    const int roundaboutCenterY = mainY(65);
+    const int junctionY = mainY(69);
+#endif
     const int thick = 5;
     if (maneuver == Maneuver::None) return;
     if (const assets::AlphaMask *asset = maneuverAsset(maneuver)) {
-        canvas.alphaMask(12, mainY(34), *asset, color);
+        canvas.alphaMask(12, maneuverAssetY, *asset, color);
         if (isRoundaboutManeuver(maneuver) && exit > 0) {
             drawRoundaboutExit(canvas,exit,color);
         }
@@ -246,53 +262,53 @@ void drawManeuverIcon(Canvas &canvas, Maneuver maneuver, int exit, uint16_t colo
         return;
     }
     if (isRoundaboutManeuver(maneuver)) {
-        canvas.circle(cx, mainY(65), 20, color, 4);
-        canvas.line(cx, bottom, cx, mainY(83), color, thick);
+        canvas.circle(cx, roundaboutCenterY, 20, color, 4);
+        canvas.line(cx, bottom, cx, roundaboutCenterY + 18, color, thick);
         if (maneuver == Maneuver::RoundaboutStraight) {
-            canvas.line(cx, mainY(45), cx, top, color, thick);
+            canvas.line(cx, roundaboutCenterY - 20, cx, top, color, thick);
             arrowHead(canvas, cx, top, 0, -1, color, 3);
             drawRoundaboutExit(canvas,exit,color);
             return;
         }
         if (maneuver == Maneuver::RoundaboutUTurn) {
             const int endX = cx - 27;
-            canvas.line(cx - 19, mainY(65), endX, mainY(65), color, thick);
-            canvas.line(endX, mainY(65), endX, mainY(78), color, thick);
-            arrowHead(canvas, endX, mainY(78), 0, 1, color, 3);
+            canvas.line(cx - 19, roundaboutCenterY, endX, roundaboutCenterY, color, thick);
+            canvas.line(endX, roundaboutCenterY, endX, roundaboutCenterY + 13, color, thick);
+            arrowHead(canvas, endX, roundaboutCenterY + 13, 0, 1, color, 3);
             drawRoundaboutExit(canvas,exit,color);
             return;
         }
         const bool left = maneuver == Maneuver::RoundaboutLeft;
         const int endX = left ? cx - 27 : cx + 27;
-        canvas.line(left ? cx - 19 : cx + 19, mainY(65), endX, mainY(65), color, thick);
-        arrowHead(canvas, endX, mainY(65), left ? -1 : 1, 0, color, 3);
+        canvas.line(left ? cx - 19 : cx + 19, roundaboutCenterY, endX, roundaboutCenterY, color, thick);
+        arrowHead(canvas, endX, roundaboutCenterY, left ? -1 : 1, 0, color, 3);
         drawRoundaboutExit(canvas,exit,color);
         return;
     }
     if (maneuver == Maneuver::UTurn || maneuver == Maneuver::UTurnRightReserved) {
         const bool right = maneuver == Maneuver::UTurnRightReserved;
         const int side = right ? 1 : -1;
-        canvas.line(cx, bottom, cx, mainY(55), color, thick);
-        canvas.line(cx, mainY(55), cx + side * 16, mainY(43), color, thick);
-        canvas.line(cx + side * 16, mainY(43), cx + side * 27, mainY(55), color, thick);
-        canvas.line(cx + side * 27, mainY(55), cx + side * 27, mainY(68), color, thick);
-        arrowHead(canvas, cx + side * 27, mainY(68), 0, 1, color, 3);
+        canvas.line(cx, bottom, cx, top + 17, color, thick);
+        canvas.line(cx, top + 17, cx + side * 16, top + 5, color, thick);
+        canvas.line(cx + side * 16, top + 5, cx + side * 27, top + 17, color, thick);
+        canvas.line(cx + side * 27, top + 17, cx + side * 27, top + 30, color, thick);
+        arrowHead(canvas, cx + side * 27, top + 30, 0, 1, color, 3);
         return;
     }
 
     int endX = cx, endY = top;
     switch (maneuver) {
-        case Maneuver::Left: endX = 15; endY = mainY(53); break;
-        case Maneuver::Right: endX = 69; endY = mainY(53); break;
-        case Maneuver::SlightLeft: case Maneuver::KeepLeft: endX = 21; endY = mainY(42); break;
-        case Maneuver::SlightRight: case Maneuver::KeepRight: endX = 63; endY = mainY(42); break;
-        case Maneuver::SharpLeft: case Maneuver::ExitLeft: endX = 14; endY = mainY(73); break;
-        case Maneuver::SharpRight: case Maneuver::ExitRight: endX = 70; endY = mainY(73); break;
+        case Maneuver::Left: endX = 15; endY = top + 15; break;
+        case Maneuver::Right: endX = 69; endY = top + 15; break;
+        case Maneuver::SlightLeft: case Maneuver::KeepLeft: endX = 21; endY = top + 4; break;
+        case Maneuver::SlightRight: case Maneuver::KeepRight: endX = 63; endY = top + 4; break;
+        case Maneuver::SharpLeft: case Maneuver::ExitLeft: endX = 14; endY = top + 35; break;
+        case Maneuver::SharpRight: case Maneuver::ExitRight: endX = 70; endY = top + 35; break;
         default: break;
     }
-    canvas.line(cx, bottom, cx, mainY(69), color, thick);
-    canvas.line(cx, mainY(69), endX, endY, color, thick);
-    arrowHead(canvas, endX, endY, endX - cx, endY - mainY(69), color, 3);
+    canvas.line(cx, bottom, cx, junctionY, color, thick);
+    canvas.line(cx, junctionY, endX, endY, color, thick);
+    arrowHead(canvas, endX, endY, endX - cx, endY - junctionY, color, 3);
 }
 
 const assets::ColorBitmap *alertAsset(AlertKind kind, bool dominant) {
@@ -738,7 +754,11 @@ void HudRenderer::renderManeuver(Canvas &canvas, const HudState &state, const De
     const uint16_t fg = foreground(settings);
     drawManeuverIcon(canvas,state.maneuver,state.roundaboutExit,fg);
     char distance[16]; formatDistance(state.maneuverDistanceM,distance,sizeof(distance));
-    canvas.fontText(2,mainY(108),distance,assets::kTextSmall,fg,81,true);
+#if CONFIG_WAZE_HUD_DISPLAY_CYD_28
+    canvas.fontText(2, 88, distance, assets::kTextMedium, fg, 81, true);
+#else
+    canvas.fontText(2, mainY(108), distance, assets::kTextSmall, fg, 81, true);
+#endif
 }
 
 void HudRenderer::renderSpeed(Canvas &canvas, const HudState &state, const DeviceSettings &settings) {

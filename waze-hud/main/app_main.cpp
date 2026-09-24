@@ -72,7 +72,7 @@ void overspeedLedTask(void *) {
             illuminated = !illuminated;
             setRgbLed(illuminated, false, false);
         } else {
-            setRgbLed(false, true, false);
+            setRgbLed(false, false, false);
             illuminated = false;
         }
         vTaskDelay(kOverspeedBlinkTicks);
