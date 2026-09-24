@@ -12,22 +12,24 @@ WazeHUD là firmware ESP32 nhận dữ liệu dẫn đường Waze qua BLE/HLP/1
 - Build phần mềm đã thành công; màu, orientation, BLE và độ ổn định vẫn cần xác nhận trên phần cứng.
 - Mốc code hiện tại là commit `85853d6` (`fix: black screen`).
 
-## Phần cứng và profile hiển thị
+## Phần cứng và Cấu hình Driver phân biệt phiên bản
 
-| Profile | Panel | Giao tiếp | Kích thước UI | Cách build |
-| --- | --- | --- | --- | --- |
-| CYD 2.8 inch | ILI9341 | SPI2, 40 MHz | 320×240 landscape | `build/` (mặc định branch) |
-
-Chân LCD của CYD 2.8:
-
-| Tín hiệu | GPIO |
-| --- | ---: |
-| CS / DC | 15 / 2 |
-| CLK | 14 |
-| MOSI / MISO | 13 / 12 |
-| Backlight PWM | 21 |
-| KEY/BOOT | 0 |
-| Battery ADC | Không có |
+| Thông số / Driver | Tree `CYD2.82USB` | Tree `2.81USB` |
+|---|---|---|
+| **Mục đích & Tên nhánh** | Phiên bản chính thức v2.8.2 | Phiên bản phát triển v2.8.1 |
+| **Mã phiên bản (Firmware Version)** | **v2.8.2** (`PROJECT_VER = "2.8.2"`) | **v2.8.1** (`PROJECT_VER = "2.8.1"`) |
+| **Hiển thị màn hình chờ** | `WazeHUD v2.8.2` | `WazeHUD v2.8.1` |
+| **Thông tin thiết bị BLE (`fwv`)** | Báo `fwv: "2.8.2"` cho WazeMod | Báo `fwv: "2.8.1"` cho WazeMod |
+| **Mạch mục tiêu (Target Board)** | ESP32-2432S028 (CYD 2.8" ILI9341) | ESP32-2432S028 (CYD 2.8" ILI9341) |
+| **Driver Màn hình (LCD Driver)** | `esp_lcd_ili9341` SPI2 @ 40 MHz, BGR | `esp_lcd_ili9341` SPI2 @ 40 MHz, BGR |
+| **Cấu hình Đảo màu (Color Invert)** | `INVON` (`esp_lcd_panel_invert_color = true`) | `INVON` (`esp_lcd_panel_invert_color = true`) |
+| **Cơ chế xoay (Rotation Transform)**| Phần mềm: Dirty-stripe transpose (320×240 ➔ 240×320) | Phần mềm: Dirty-stripe transpose (320×240 ➔ 240×320) |
+| **Sơ đồ chân LCD (Pinout)** | MOSI: 13, MISO: 12, SCLK: 14, CS: 15, DC: 2 | MOSI: 13, MISO: 12, SCLK: 14, CS: 15, DC: 2 |
+| **Driver Đèn nền (Backlight Driver)**| GPIO 21 (LEDC PWM 5 kHz, Tự động Ngày/Đêm) | GPIO 21 (LEDC PWM 5 kHz, Tự động Ngày/Đêm) |
+| **Driver Giao tiếp (Transport)** | Bluetooth Low Energy (BLE Server, HLP/1 4 Hz) | Bluetooth Low Energy (BLE Server, HLP/1 4 Hz) |
+| **Driver LED RGB sau lưng** | GPIO 4 (R), 16 (G), 17 (B) - Chạy bình thường: TẮT | GPIO 4 (R), 16 (G), 17 (B) - Chạy bình thường: TẮT |
+| **Driver Nút cứng (Button)** | GPIO 0 (BOOT, active-low, đa tác vụ 1/2/giữ) | GPIO 0 (BOOT, active-low, đa tác vụ 1/2/giữ) |
+| **Cấu hình Flash & Phân vùng** | 4MB Flash (DIO 40MHz, 2 OTA slot 1856 KB) | 4MB Flash (DIO 40MHz, 2 OTA slot 1856 KB) |
 
 ## Kiến trúc
 
