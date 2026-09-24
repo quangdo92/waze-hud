@@ -97,6 +97,33 @@ int64_t localClockMillis(const HudState &state) {
            static_cast<int64_t>(state.timezoneOffsetMinutes) * 60000LL;
 }
 
+uint8_t calculateTimeOfDayBrightness(int normalizedMinute, uint8_t maxBrightness) {
+    constexpr int kDayStartMinute = 6 * 60;          // 06:00 (360)
+    constexpr int kSunsetStartMinute = 17 * 60 + 30; // 17:30 (1050)
+    constexpr int kNightStartMinute = 19 * 60;        // 19:00 (1140)
+    constexpr int kSunriseStartMinute = 5 * 60;       // 05:00 (300)
+    constexpr uint8_t kNightBrightness = 30;
+
+    if (maxBrightness < kNightBrightness) maxBrightness = 100;
+
+    if (normalizedMinute >= kDayStartMinute && normalizedMinute < kSunsetStartMinute) {
+        return maxBrightness;
+    } else if (normalizedMinute >= kSunsetStartMinute && normalizedMinute < kNightStartMinute) {
+        // Sunset transition: 17:30 -> 19:00 (Max -> 30%)
+        const float progress = static_cast<float>(normalizedMinute - kSunsetStartMinute) /
+                               static_cast<float>(kNightStartMinute - kSunsetStartMinute);
+        return static_cast<uint8_t>(maxBrightness - progress * (maxBrightness - kNightBrightness) + 0.5f);
+    } else if (normalizedMinute >= kNightStartMinute || normalizedMinute < kSunriseStartMinute) {
+        // Night: 19:00 -> 05:00 (30%)
+        return kNightBrightness;
+    } else {
+        // Sunrise transition: 05:00 -> 06:00 (30% -> Max)
+        const float progress = static_cast<float>(normalizedMinute - kSunriseStartMinute) /
+                               static_cast<float>(kDayStartMinute - kSunriseStartMinute);
+        return static_cast<uint8_t>(kNightBrightness + progress * (maxBrightness - kNightBrightness) + 0.5f);
+    }
+}
+
 const char *displayStreet(const HudState &state) {
     // Hiển thị tên đường
     if (state.currentStreet[0] != 0) return state.currentStreet.data();
@@ -486,10 +513,21 @@ void HudRenderer::render(const HudState &state, const DeviceSettings &settings,
                                state.hasProducerState != previous_.hasProducerState ||
                                state.navigationActive != previous_.navigationActive;
     const bool configChanged = firstFrame_ || hasSettingsChanged(settings, previousSettings_);
-    if (configChanged) {
-        const esp_err_t brightnessResult = DisplayDriver::instance().setBrightness(settings.brightness);
+    uint8_t targetBrightness = settings.brightness;
+    if (currentClockMinute != INT64_MIN) {
+        const int normalizedMinute = static_cast<int>((currentClockMinute % 1440 + 1440) % 1440);
+        targetBrightness = calculateTimeOfDayBrightness(normalizedMinute, settings.brightness > 30 ? settings.brightness : 100);
+    }
+
+    if (firstFrame_ || targetBrightness != currentAppliedBrightness_) {
+        const esp_err_t brightnessResult = DisplayDriver::instance().setBrightness(targetBrightness);
         if (brightnessResult != ESP_OK)
             ESP_LOGE(kTag, "Brightness update failed: %s", esp_err_to_name(brightnessResult));
+        else
+            currentAppliedBrightness_ = targetBrightness;
+    }
+
+    if (configChanged) {
         const esp_err_t orientationResult = DisplayDriver::instance().setOrientation(
             settings.mirrorHud, settings.rotateDisplay);
         if (orientationResult != ESP_OK)

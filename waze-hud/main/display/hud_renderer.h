@@ -48,6 +48,7 @@ private:
     bool marqueeActive_{false};
     bool clockActive_{false};
     bool firstFrame_{true};
+    uint8_t currentAppliedBrightness_{0};
 };
 
 }  // namespace waze_hud
