@@ -1,18 +1,5 @@
 # WazeHUD cho màn hình CYD 2.8 inch (Bản tối ưu Taplo Ô tô)
 
-WazeHUD biến mạch ESP32-2432S028 (Cheap Yellow Display 2.8 inch) thành màn hình HUD hiển thị thông tin dẫn đường Waze chuyên nghiệp cho ô tô, nhận dữ liệu thời gian thực từ Waze Mod qua Bluetooth Low Energy (BLE).
-
-> [!IMPORTANT]
-> Firmware này dành riêng cho mạch **ESP32-2432S028 (ESP32-WROOM-32, màn hình 2.8" ILI9341)**. Không nạp firmware này cho các bản CYD dùng ESP32-S3 hoặc controller màn hình khác.
-
----
-
-## Hình ảnh thực tế
-
-![WazeHUD hiển thị biển giới hạn tốc độ, cảnh báo và ETA trên CYD 2.8 inch](./assets/demo/image_01.png)
-
-![WazeHUD hoạt động song song với Waze Mod trên điện thoại](./assets/demo/image_02.png)
-
 ---
 
 ## Tính năng chính & Cải tiến nổi bật
