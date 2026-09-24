@@ -69,7 +69,11 @@ BLE callback chỉ sao chép dữ liệu vào queue. JSON, cập nhật state v�
 - Hiển thị tốc độ, biển giới hạn, hướng rẽ, vòng xuyến/lối ra, tối đa 10 làn đường, ETA, tên đường Việt Nam và cảnh báo; đầu mũi tên lane dùng asset Waze, hàng guidance nằm trên tên đường với ETA bên trái, còn `alrs` thứ 2/3 nằm ngay dưới cảnh báo chính.
 - Tên đường dài chạy marquee; đồng hồ có dấu `:` nhấp nháy theo giây.
 - Cảnh báo gần dưới 500 m đổi màu khoảng cách sang xanh.
-- LED RGB phía sau đổi màu liên tục khi chưa kết nối, xanh dương khi chờ state, xanh lá ở tốc độ bình thường và nháy đỏ 2 Hz khi quá tốc độ.
+- LED RGB phía sau đổi màu liên tục khi chưa kết nối, xanh dương khi chờ state, TẮT ở tốc độ bình thường (chống chói mắt ban đêm) và nháy đỏ 2 Hz khi quá tốc độ.
+- Tự động điều chỉnh độ sáng Ngày / Đêm theo thời gian thực (100% ban ngày, 30% ban đêm).
+- Nền đen tuyệt đối OLED-style (`0x0000`), viền đỏ tươi bão hòa 100% (`0xF800`) cho biển báo giới hạn và biển cấm.
+- Biển báo cảnh báo phóng to 60×60 px, số mét khoảng cách cảnh báo và khoảng cách rẽ nâng cấp lên font `kTextMedium` (22 px), mũi tên rẽ đẩy lên cao (`y=16`).
+- Gỡ bỏ Boot Logo tiết kiệm 27.6 KB Flash ROM, căn giữa màn hình chờ, ẩn biểu tượng Bluetooth/vạch sóng trên HUD chính.
 - Hỗ trợ mirror HUD (nhấn đúp BOOT), xoay 180° (nhấn đơn), độ sáng, theme, offset và ngưỡng quá tốc độ lưu trong NVS.
 - Cấu hình `Hien thi toc do` cho phép giữ tốc độ xe làm chính hoặc dùng biển giới hạn lớn làm chính với tốc độ xe nhỏ ở góc dưới-phải.
 - KEY hiển thị trạng thái pin/BLE và đổi hướng màn hình theo cấu hình phần cứng.
