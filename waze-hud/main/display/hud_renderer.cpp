@@ -238,7 +238,7 @@ void drawRoundaboutExit(Canvas &canvas, int exit, uint16_t color) {
     constexpr int centerX = 42;
     constexpr int width = 36;
 #if CONFIG_WAZE_HUD_DISPLAY_CYD_28
-    constexpr int centerY = 46;
+    constexpr int centerY = 54;
 #else
     const int centerY = mainY(65);
 #endif
@@ -264,11 +264,11 @@ const assets::ColorBitmap *speedLimitAsset(int value, SpeedSignContext context) 
 void drawManeuverIcon(Canvas &canvas, Maneuver maneuver, int exit, uint16_t color) {
     constexpr int cx = 42;
 #if CONFIG_WAZE_HUD_DISPLAY_CYD_28
-    constexpr int maneuverAssetY = 26;
-    constexpr int top = 30;
-    constexpr int bottom = 82;
-    constexpr int roundaboutCenterY = 54;
-    constexpr int junctionY = 59;
+    constexpr int maneuverAssetY = 34;
+    constexpr int top = 38;
+    constexpr int bottom = 90;
+    constexpr int roundaboutCenterY = 62;
+    constexpr int junctionY = 67;
 #else
     const int maneuverAssetY = mainY(34);
     const int top = mainY(38);
@@ -513,6 +513,43 @@ void HudRenderer::render(const HudState &state, const DeviceSettings &settings,
         else marqueeOffset_ = overflow;
     }
     const bool marqueeFrameChanged = marqueeActive_ && marqueeOffset_ != marqueeRenderedOffset_;
+#if CONFIG_WAZE_HUD_DISPLAY_CYD_28
+    const bool nextStreetChanged = firstFrame_ || !sameText(state.nextStreet, previous_.nextStreet);
+    constexpr int availableNextStreetWidth = 81;
+    const int nextStreetWidth = state.nextStreet[0] != 0
+        ? metrics.fontTextWidth(state.nextStreet.data(), assets::kTextMedium) : 0;
+    const bool shouldNextStreetMarquee = state.connected && state.hasProducerState &&
+                                         state.nextStreet[0] != 0 &&
+                                         nextStreetWidth > availableNextStreetWidth;
+    if (!shouldNextStreetMarquee) {
+        nextStreetMarqueeActive_ = false;
+        nextStreetMarqueeOffset_ = 0;
+    } else {
+        if (!nextStreetMarqueeActive_ || nextStreetChanged ||
+            nextStreetWidth != nextStreetMarqueeTextWidth_) {
+            nextStreetMarqueeEpochMs_ = nowMs;
+            nextStreetMarqueeOffset_ = 0;
+            nextStreetMarqueeRenderedOffset_ = -1;
+        }
+        nextStreetMarqueeActive_ = true;
+        nextStreetMarqueeTextWidth_ = nextStreetWidth;
+        constexpr uint64_t kNsStartHoldMs = 1500;
+        constexpr uint64_t kNsEndHoldMs = 900;
+        constexpr uint64_t kNsMsPerPixel = 45;
+        const int overflow = nextStreetWidth - availableNextStreetWidth + 6;
+        const uint64_t scrollMs = static_cast<uint64_t>(overflow) * kNsMsPerPixel;
+        const uint64_t cycleMs = kNsStartHoldMs + scrollMs + kNsEndHoldMs;
+        const uint64_t elapsed = cycleMs > 0 ? (nowMs - nextStreetMarqueeEpochMs_) % cycleMs : 0;
+        if (elapsed < kNsStartHoldMs) nextStreetMarqueeOffset_ = 0;
+        else if (elapsed < kNsStartHoldMs + scrollMs)
+            nextStreetMarqueeOffset_ = std::min(overflow, static_cast<int>((elapsed - kNsStartHoldMs) / kNsMsPerPixel));
+        else nextStreetMarqueeOffset_ = overflow;
+    }
+    const bool nextStreetMarqueeFrameChanged = nextStreetMarqueeActive_ &&
+                                               nextStreetMarqueeOffset_ != nextStreetMarqueeRenderedOffset_;
+#else
+    constexpr bool nextStreetMarqueeFrameChanged = false;
+#endif
     const bool statusChanged = firstFrame_ || state.connected != previous_.connected ||
                                state.hasProducerState != previous_.hasProducerState ||
                                state.navigationActive != previous_.navigationActive;
@@ -563,15 +600,20 @@ void HudRenderer::render(const HudState &state, const DeviceSettings &settings,
     }
     const bool systemStatusClosed = previousSystemStatus_.visible;
     bool streetRendered = false;
+    bool maneuverRendered = false;
     if (systemStatusClosed || statusChanged || configChanged || !state.connected || !state.hasProducerState) {
         renderRegion(layout::Maneuver,state,settings,systemStatus);
+        maneuverRendered = true;
         renderSpeedArea();
         renderRegion(layout::Alerts,state,settings,systemStatus);
         renderRegion(layout::Guidance,state,settings,systemStatus);
         renderRegion(layout::Street,state,settings,systemStatus);
         streetRendered = true;
     } else {
-        if (maneuverChanged(state, previous_)) renderRegion(layout::Maneuver,state,settings,systemStatus);
+        if (maneuverChanged(state, previous_) || nextStreetMarqueeFrameChanged) {
+            renderRegion(layout::Maneuver,state,settings,systemStatus);
+            maneuverRendered = true;
+        }
         const bool speedChanged = state.speedKmh != previous_.speedKmh ||
                                   state.speedLimitKmh != previous_.speedLimitKmh;
         const bool limitChanged = state.speedLimitKmh != previous_.speedLimitKmh ||
@@ -606,6 +648,7 @@ void HudRenderer::render(const HudState &state, const DeviceSettings &settings,
     renderedClockMinute_ = currentClockMinute;
     renderedClockPhase_ = currentClockPhase;
     if (streetRendered) marqueeRenderedOffset_ = marqueeOffset_;
+    if (maneuverRendered) nextStreetMarqueeRenderedOffset_ = nextStreetMarqueeOffset_;
     firstFrame_ = false;
 }
 
@@ -771,11 +814,17 @@ void HudRenderer::renderManeuver(Canvas &canvas, const HudState &state, const De
     const uint16_t fg = colors::White;
 #if CONFIG_WAZE_HUD_DISPLAY_CYD_28
     if (state.nextStreet[0] != 0) {
-        canvas.fontText(2, 4, state.nextStreet.data(), assets::kTextSmall, colors::White, 81, true);
+        if (nextStreetMarqueeActive_) {
+            canvas.fontText(2 - nextStreetMarqueeOffset_, 2, state.nextStreet.data(),
+                            assets::kTextMedium, colors::White, -1, false);
+        } else {
+            canvas.fontText(2, 2, state.nextStreet.data(),
+                            assets::kTextMedium, colors::White, 81, true);
+        }
     }
-    drawManeuverIcon(canvas,state.maneuver,state.roundaboutExit,fg);
-    char distance[16]; formatDistance(state.maneuverDistanceM,distance,sizeof(distance));
-    canvas.fontText(2, 94, distance, assets::kTextMedium, colors::White, 81, true);
+    drawManeuverIcon(canvas, state.maneuver, state.roundaboutExit, fg);
+    char distance[16]; formatDistance(state.maneuverDistanceM, distance, sizeof(distance));
+    canvas.fontText(2, 108, distance, assets::kTextMedium, colors::White, 81, true);
 #else
     drawManeuverIcon(canvas,state.maneuver,state.roundaboutExit,fg);
     char distance[16]; formatDistance(state.maneuverDistanceM,distance,sizeof(distance));
@@ -860,7 +909,9 @@ void HudRenderer::renderAlerts(Canvas &canvas, const HudState &state, const Devi
         char clock[8];
         std::snprintf(clock, sizeof(clock), "%02d:%02d",
                       normalizedMinute / 60, normalizedMinute % 60);
-        canvas.fontText(0, 2, clock, assets::kTextMedium, colors::White, canvas.width(), true);
+        const int clockWidth = canvas.fontTextWidth(clock, assets::kTextMedium);
+        const int clockX = canvas.width() - clockWidth - 2;
+        canvas.fontText(clockX, 1, clock, assets::kTextMedium, colors::White, -1, false);
     }
 
     const bool activeZone = state.noPassingZone;
