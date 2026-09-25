@@ -515,7 +515,7 @@ void HudRenderer::render(const HudState &state, const DeviceSettings &settings,
     const bool marqueeFrameChanged = marqueeActive_ && marqueeOffset_ != marqueeRenderedOffset_;
 #if CONFIG_WAZE_HUD_DISPLAY_CYD_28
     const bool nextStreetChanged = firstFrame_ || !sameText(state.nextStreet, previous_.nextStreet);
-    constexpr int availableNextStreetWidth = 81;
+    constexpr int availableNextStreetWidth = 75;
     const int nextStreetWidth = state.nextStreet[0] != 0
         ? metrics.fontTextWidth(state.nextStreet.data(), assets::kTextMedium) : 0;
     const bool shouldNextStreetMarquee = state.connected && state.hasProducerState &&
@@ -550,6 +550,15 @@ void HudRenderer::render(const HudState &state, const DeviceSettings &settings,
 #else
     constexpr bool nextStreetMarqueeFrameChanged = false;
 #endif
+    const bool isOverspeed = state.connected && state.hasProducerState &&
+                             state.navigationActive && !state.signalStale &&
+                             firmwareOverspeed(state, settings);
+    overspeedActive_ = isOverspeed;
+    const bool currentOverspeedPhase = isOverspeed && ((nowMs / 250ULL) % 2ULL == 0ULL);
+    const bool overspeedPhaseChanged = currentOverspeedPhase != renderedOverspeedPhase_;
+    if (overspeedPhaseChanged) {
+        renderedOverspeedPhase_ = currentOverspeedPhase;
+    }
     const bool statusChanged = firstFrame_ || state.connected != previous_.connected ||
                                state.hasProducerState != previous_.hasProducerState ||
                                state.navigationActive != previous_.navigationActive;
@@ -601,7 +610,10 @@ void HudRenderer::render(const HudState &state, const DeviceSettings &settings,
     const bool systemStatusClosed = previousSystemStatus_.visible;
     bool streetRendered = false;
     bool maneuverRendered = false;
-    if (systemStatusClosed || statusChanged || configChanged || !state.connected || !state.hasProducerState) {
+    const bool triggerFullRedraw = systemStatusClosed || statusChanged || configChanged ||
+                                   !state.connected || !state.hasProducerState ||
+                                   overspeedPhaseChanged;
+    if (triggerFullRedraw) {
         renderRegion(layout::Maneuver,state,settings,systemStatus);
         maneuverRendered = true;
         renderSpeedArea();
@@ -652,6 +664,22 @@ void HudRenderer::render(const HudState &state, const DeviceSettings &settings,
     firstFrame_ = false;
 }
 
+void renderOverspeedBorder(Canvas &canvas, const Rect &region) {
+    constexpr int kBorder = 4;
+    if (region.y == 0) {
+        canvas.fillRect(0, 0, canvas.width(), kBorder, colors::Red);
+    }
+    if (region.y + region.height == layout::Height) {
+        canvas.fillRect(0, canvas.height() - kBorder, canvas.width(), kBorder, colors::Red);
+    }
+    if (region.x == 0) {
+        canvas.fillRect(0, 0, kBorder, canvas.height(), colors::Red);
+    }
+    if (region.x + region.width == layout::Width) {
+        canvas.fillRect(canvas.width() - kBorder, 0, kBorder, canvas.height(), colors::Red);
+    }
+}
+
 void HudRenderer::renderRegion(const Rect &region, const HudState &state,
                                const DeviceSettings &settings,
                                const SystemStatusSnapshot &systemStatus) {
@@ -668,8 +696,12 @@ void HudRenderer::renderRegion(const Rect &region, const HudState &state,
     else if (sameRegion(region, layout::Alerts)) renderAlerts(canvas,state,settings);
     else if (sameRegion(region, layout::Guidance)) renderGuidance(canvas,state,settings);
     else renderStreet(canvas,state,settings);
-    if (!systemStatus.visible && state.connected && state.hasProducerState)
+    if (!systemStatus.visible && state.connected && state.hasProducerState) {
         renderMainIndicators(canvas, region, systemStatus);
+        if (renderedOverspeedPhase_) {
+            renderOverspeedBorder(canvas, region);
+        }
+    }
     const esp_err_t result = DisplayDriver::instance().drawRegion(physicalRegion, buffer_);
     if (result != ESP_OK) ESP_LOGE(kTag, "Dirty region (%d,%d %dx%d) failed: %s",
                                    region.x,region.y,region.width,region.height,esp_err_to_name(result));
@@ -815,11 +847,11 @@ void HudRenderer::renderManeuver(Canvas &canvas, const HudState &state, const De
 #if CONFIG_WAZE_HUD_DISPLAY_CYD_28
     if (state.nextStreet[0] != 0) {
         if (nextStreetMarqueeActive_) {
-            canvas.fontText(2 - nextStreetMarqueeOffset_, 2, state.nextStreet.data(),
+            canvas.fontText(5 - nextStreetMarqueeOffset_, 4, state.nextStreet.data(),
                             assets::kTextMedium, colors::White, -1, false);
         } else {
-            canvas.fontText(2, 2, state.nextStreet.data(),
-                            assets::kTextMedium, colors::White, 81, true);
+            canvas.fontText(5, 4, state.nextStreet.data(),
+                            assets::kTextMedium, colors::White, 75, true);
         }
     }
     drawManeuverIcon(canvas, state.maneuver, state.roundaboutExit, fg);
@@ -834,7 +866,9 @@ void HudRenderer::renderManeuver(Canvas &canvas, const HudState &state, const De
 
 void HudRenderer::renderSpeed(Canvas &canvas, const HudState &state, const DeviceSettings &settings) {
     canvas.clear(colors::Background);
-    const uint16_t color = firmwareOverspeed(state, settings) ? colors::Red : foreground(settings);
+    const uint16_t color = firmwareOverspeed(state, settings)
+        ? (renderedOverspeedPhase_ ? colors::Red : colors::White)
+        : foreground(settings);
     char speed[5]; std::snprintf(speed,sizeof(speed),"%d",std::clamp(state.speedKmh,0,999));
     canvas.fontText(2,mainY(26),speed,assets::kNumberLarge,color,canvas.width()-4,true);
     canvas.fontText(2,mainY(90),"km/h",assets::kTextSmall,colors::Muted,canvas.width()-4,true);
@@ -866,7 +900,8 @@ void HudRenderer::renderLimitPrimary(Canvas &canvas, const HudState &state,
     char speed[5];
     std::snprintf(speed, sizeof(speed), "%d", std::clamp(state.speedKmh, 0, 999));
     const uint16_t speedColor = firmwareOverspeed(state, settings)
-        ? colors::Red : foreground(settings);
+        ? (renderedOverspeedPhase_ ? colors::Red : colors::White)
+        : foreground(settings);
     canvas.fontText(96, 101, speed, assets::kNumberMedium,
                     speedColor, 42, true);
 }
@@ -910,8 +945,8 @@ void HudRenderer::renderAlerts(Canvas &canvas, const HudState &state, const Devi
         std::snprintf(clock, sizeof(clock), "%02d:%02d",
                       normalizedMinute / 60, normalizedMinute % 60);
         const int clockWidth = canvas.fontTextWidth(clock, assets::kTextMedium);
-        const int clockX = canvas.width() - clockWidth - 2;
-        canvas.fontText(clockX, 1, clock, assets::kTextMedium, colors::White, -1, false);
+        const int clockX = canvas.width() - clockWidth - 5;
+        canvas.fontText(clockX, 4, clock, assets::kTextMedium, colors::White, -1, false);
     }
 
     const bool activeZone = state.noPassingZone;
