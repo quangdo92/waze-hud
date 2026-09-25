@@ -320,7 +320,9 @@ esp_err_t DisplayDriver::init() {
     panel_ = panel;
     ESP_RETURN_ON_ERROR(esp_lcd_panel_reset(panel), kTag, "ILI9341 software reset failed");
     ESP_RETURN_ON_ERROR(esp_lcd_panel_init(panel), kTag, "ILI9341 initialization failed");
-    ESP_RETURN_ON_ERROR(esp_lcd_panel_invert_color(panel, true), kTag,
+    // Standard ILI9341 panels on CYD 2.8 use normal source polarity: RGB565 0x0000
+    // is black with inversion off (INVOFF). INVON inverts black to white and red to cyan.
+    ESP_RETURN_ON_ERROR(esp_lcd_panel_invert_color(panel, false), kTag,
                         "ILI9341 inversion setup failed");
     ESP_RETURN_ON_ERROR(esp_lcd_panel_disp_on_off(panel, true), kTag,
                         "ILI9341 display enable failed");

@@ -22,7 +22,7 @@ WazeHUD là firmware ESP32 nhận dữ liệu dẫn đường Waze qua BLE/HLP/1
 | **Thông tin thiết bị BLE (`fwv`)** | Báo `fwv: "2.8.2"` cho WazeMod | Báo `fwv: "2.8.1"` cho WazeMod |
 | **Mạch mục tiêu (Target Board)** | ESP32-2432S028 (CYD 2.8" ILI9341) | ESP32-2432S028 (CYD 2.8" ILI9341) |
 | **Driver Màn hình (LCD Driver)** | `esp_lcd_ili9341` SPI2 @ 40 MHz, BGR | `esp_lcd_ili9341` SPI2 @ 40 MHz, BGR |
-| **Cấu hình Đảo màu (Color Invert)** | `INVON` (`esp_lcd_panel_invert_color = true`) | `INVON` (`esp_lcd_panel_invert_color = true`) |
+| **Cấu hình Đảo màu (Color Invert)** | `INVOFF` (`esp_lcd_panel_invert_color = false`) | `INVON` (`esp_lcd_panel_invert_color = true`) |
 | **Cơ chế xoay (Rotation Transform)**| Phần mềm: Dirty-stripe transpose (320×240 ➔ 240×320) | Phần mềm: Dirty-stripe transpose (320×240 ➔ 240×320) |
 | **Sơ đồ chân LCD (Pinout)** | MOSI: 13, MISO: 12, SCLK: 14, CS: 15, DC: 2 | MOSI: 13, MISO: 12, SCLK: 14, CS: 15, DC: 2 |
 | **Driver Đèn nền (Backlight Driver)**| GPIO 21 (LEDC PWM 5 kHz, Tự động Ngày/Đêm) | GPIO 21 (LEDC PWM 5 kHz, Tự động Ngày/Đêm) |
