@@ -742,7 +742,7 @@ void HudRenderer::renderSystemStatus(Canvas &canvas, const Rect &region,
 }
 
 #ifndef WAZE_HUD_FIRMWARE_VERSION
-#define WAZE_HUD_FIRMWARE_VERSION "2.8"
+#define WAZE_HUD_FIRMWARE_VERSION "2.8.2"
 #endif
 
 void HudRenderer::renderStatus(Canvas &canvas, const Rect &region, const HudState &state, const DeviceSettings &settings) {
