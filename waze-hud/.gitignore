@@ -7,6 +7,6 @@
 /sdkconfig
 /sdkconfig.**
 backups/
-dist/
+# dist/
 .vscode/
 /managed_components/

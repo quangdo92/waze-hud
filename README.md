@@ -95,14 +95,14 @@ Bảng thông số chi tiết cấu hình driver phần cứng để phân biệ
 
 | File | Offset flash | Dùng khi nào |
 |---|---|---|
-| [`waze_hud_cyd_28_factory.bin`](./waze-hud/dist/waze_hud_cyd_28_factory.bin) | `0x0` | **Khuyên dùng:** Nạp mới hoàn toàn (chứa bootloader, partition table, ota_data và app) |
-| [`waze_hud_cyd_28.bin`](./waze-hud/dist/waze_hud_cyd_28.bin) | `0x20000` | Nạp cập nhật ứng dụng (giữ nguyên partition table hiện có) |
+| [`waze_hud_cyd_28_1usb_factory.bin`](./waze-hud/dist/waze_hud_cyd_28_1usb_factory.bin) | `0x0` | **Khuyên dùng:** Nạp mới hoàn toàn (chứa bootloader, partition table, ota_data và app) |
+| [`waze_hud_cyd_28_1usb.bin`](./waze-hud/dist/waze_hud_cyd_28_1usb.bin) | `0x20000` | Nạp cập nhật ứng dụng (giữ nguyên partition table hiện có) |
 
 ### Lệnh nạp qua esptool (Windows PowerShell / Linux Terminal)
 
 ```bash
 # Nạp bản Factory All-in-One tại offset 0x0
-python -m esptool --chip esp32 -b 460800 write_flash 0x0 waze_hud_cyd_28_factory.bin
+python -m esptool --chip esp32 -b 460800 write_flash 0x0 waze-hud/dist/waze_hud_cyd_28_1usb_factory.bin
 ```
 
 *(Thay cổng COM tương ứng, ví dụ `--port COM12` trên Windows hoặc `--port /dev/ttyUSB0` trên Linux).*
