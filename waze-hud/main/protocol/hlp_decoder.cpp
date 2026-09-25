@@ -75,9 +75,87 @@ void decodeTrafficDetails(const cJSON *object, const char *severityKey,
     alert.trafficDelayMinutes = delay >= 0 ? delay : -1;
 }
 
+bool isProhibitionAlert(AlertKind kind) {
+    switch (kind) {
+        case AlertKind::NoPassing:
+        case AlertKind::EndNoPassing:
+        case AlertKind::NoCar:
+        case AlertKind::NoMotorcycle:
+        case AlertKind::NoLeftTurn:
+        case AlertKind::NoRightTurn:
+        case AlertKind::NoUTurn:
+        case AlertKind::NoStraight:
+        case AlertKind::MandatoryStraight:
+        case AlertKind::MandatoryRight:
+        case AlertKind::MandatoryLeft:
+        case AlertKind::CarLane:
+        case AlertKind::MotorcycleLane:
+        case AlertKind::OneWay:
+        case AlertKind::ProhibitedRoad:
+        case AlertKind::CombinedTurnRestriction:
+        case AlertKind::NoStraightAndRight:
+        case AlertKind::NoLeftAndUTurn:
+        case AlertKind::NoStraightAndLeft:
+        case AlertKind::NoLeftAndRight:
+        case AlertKind::CarNoLeftAndUTurn:
+        case AlertKind::CarNoRightAndUTurn:
+        case AlertKind::NoRightAndUTurn:
+        case AlertKind::CarNoLeftTurn:
+        case AlertKind::CarNoRightTurn:
+        case AlertKind::CarNoUTurn:
+        case AlertKind::EndAllProhibitions:
+        case AlertKind::EndSpeedRestriction:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool isCameraAlert(AlertKind kind) {
+    switch (kind) {
+        case AlertKind::SpeedCamera:
+        case AlertKind::RedLightCamera:
+        case AlertKind::PhoneCamera:
+        case AlertKind::DummyCamera:
+        case AlertKind::SeatbeltCamera:
+        case AlertKind::DistanceCamera:
+        case AlertKind::BusLaneCamera:
+        case AlertKind::NoiseCamera:
+        case AlertKind::StopSignCamera:
+            return true;
+        default:
+            return false;
+    }
+}
+
+int alertPriorityScore(const AlertState &alert) {
+    if (alert.kind == AlertKind::SpeedDrop) return 100;
+    if (isProhibitionAlert(alert.kind)) return 90;
+    if (alert.kind == AlertKind::RoadClosed || alert.kind == AlertKind::Accident ||
+        alert.kind == AlertKind::Hazard) return 70;
+    if (alert.kind == AlertKind::TrafficJam) return 50;
+    if (isCameraAlert(alert.kind)) {
+        if (alert.distanceM >= 0 && alert.distanceM <= 250) return 60;
+        return 10;
+    }
+    return 30;
+}
+
 bool speedDropTieComesBefore(const AlertState &left, const AlertState &right) {
     return left.kind == AlertKind::SpeedDrop && right.kind == AlertKind::SpeedDrop &&
            left.distanceM == right.distanceM && left.valueKmh > right.valueKmh;
+}
+
+bool alertPriorityComesBefore(const AlertState &left, const AlertState &right) {
+    const int scoreLeft = alertPriorityScore(left);
+    const int scoreRight = alertPriorityScore(right);
+    if (scoreLeft != scoreRight) {
+        return scoreLeft > scoreRight;
+    }
+    if (left.distanceM >= 0 && right.distanceM >= 0 && left.distanceM != right.distanceM) {
+        return left.distanceM < right.distanceM;
+    }
+    return speedDropTieComesBefore(left, right);
 }
 }  // namespace
 
@@ -85,6 +163,10 @@ void HlpDecoder::resetSession() {
     session_ = 0;
     lastTimestamp_ = 0;
     haveTimestamp_ = false;
+    cachedLanes_ = {};
+    cachedLaneCount_ = 0;
+    cachedLaneManeuver_ = Maneuver::None;
+    laneLostTimestampMs_ = 0;
 }
 
 bool HlpDecoder::handleHi(const cJSON *root, HudState &state) {
@@ -186,7 +268,7 @@ bool HlpDecoder::decodeState(const cJSON *root, HudState &state) {
         for (uint8_t index = 1; index < parsedAlertCount; ++index) {
             const AlertState candidate = parsedAlerts[index];
             uint8_t position = index;
-            while (position > 0 && speedDropTieComesBefore(candidate, parsedAlerts[position - 1])) {
+            while (position > 0 && alertPriorityComesBefore(candidate, parsedAlerts[position - 1])) {
                 parsedAlerts[position] = parsedAlerts[position - 1];
                 --position;
             }
@@ -203,11 +285,13 @@ bool HlpDecoder::decodeState(const cJSON *root, HudState &state) {
         }
     }
 
+    uint8_t parsedLaneCount = 0;
+    std::array<LaneState, kMaxLanes> parsedLanes{};
     const cJSON *lanes = cJSON_GetObjectItemCaseSensitive(root, "lan");
     if (cJSON_IsArray(lanes)) {
         const cJSON *lane = nullptr;
         cJSON_ArrayForEach(lane, lanes) {
-            if (decoded.laneCount >= kMaxLanes) break;
+            if (parsedLaneCount >= kMaxLanes) break;
             if (!cJSON_IsArray(lane) || cJSON_GetArraySize(lane) != 2) continue;
             const cJSON *directionsItem = cJSON_GetArrayItem(lane, 0);
             const cJSON *selectedItem = cJSON_GetArrayItem(lane, 1);
@@ -221,9 +305,39 @@ bool HlpDecoder::decodeState(const cJSON *root, HudState &state) {
             const int directions = static_cast<int>(directionsItem->valuedouble);
             const int selected = static_cast<int>(selectedItem->valuedouble);
             if ((selected & ~directions) != 0) continue;
-            LaneState &target = decoded.lanes[decoded.laneCount++];
+            LaneState &target = parsedLanes[parsedLaneCount++];
             target.directionMask = static_cast<uint8_t>(directions);
             target.selectedMask = static_cast<uint8_t>(selected);
+        }
+    }
+
+    const int64_t nowMs = static_cast<int64_t>(esp_timer_get_time() / 1000);
+    if (parsedLaneCount > 0) {
+        cachedLanes_ = parsedLanes;
+        cachedLaneCount_ = parsedLaneCount;
+        cachedLaneManeuver_ = decoded.maneuver;
+        laneLostTimestampMs_ = 0;
+        decoded.lanes = cachedLanes_;
+        decoded.laneCount = cachedLaneCount_;
+    } else {
+        constexpr int64_t kLaneHoldTimeoutMs = 15000;
+        if (cachedLaneCount_ > 0 && decoded.maneuver == cachedLaneManeuver_ &&
+            decoded.maneuver != Maneuver::None) {
+            if (laneLostTimestampMs_ == 0) {
+                laneLostTimestampMs_ = nowMs;
+            }
+            if (nowMs - laneLostTimestampMs_ < kLaneHoldTimeoutMs) {
+                decoded.lanes = cachedLanes_;
+                decoded.laneCount = cachedLaneCount_;
+            } else {
+                cachedLaneCount_ = 0;
+                laneLostTimestampMs_ = 0;
+                decoded.laneCount = 0;
+            }
+        } else {
+            cachedLaneCount_ = 0;
+            laneLostTimestampMs_ = 0;
+            decoded.laneCount = 0;
         }
     }
 

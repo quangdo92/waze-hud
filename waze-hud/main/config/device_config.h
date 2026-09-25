@@ -13,10 +13,10 @@ enum class SpeedDisplayMode : uint8_t { CurrentPrimary, LimitPrimary };
 struct DeviceSettings {
     uint8_t brightness{70};
     UiTheme theme{UiTheme::Auto};
-    SpeedDisplayMode speedDisplayMode{SpeedDisplayMode::CurrentPrimary};
+    SpeedDisplayMode speedDisplayMode{SpeedDisplayMode::LimitPrimary};
     bool showStreet{true};
     bool mirrorHud{false};
-    bool rotateDisplay{false};
+    bool rotateDisplay{true};
     int8_t overspeedOffsetKmh{0};
     int8_t offsetX{0};
     int8_t offsetY{0};

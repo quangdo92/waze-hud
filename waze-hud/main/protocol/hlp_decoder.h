@@ -15,6 +15,10 @@ private:
     uint32_t session_{0};
     uint32_t lastTimestamp_{0};
     bool haveTimestamp_{false};
+    std::array<LaneState, kMaxLanes> cachedLanes_{};
+    uint8_t cachedLaneCount_{0};
+    Maneuver cachedLaneManeuver_{Maneuver::None};
+    int64_t laneLostTimestampMs_{0};
 };
 
 }  // namespace waze_hud
