@@ -19,7 +19,7 @@ config WAZE_HUD_MOCK_MODE
 config WAZE_HUD_DEFAULT_BRIGHTNESS
     int "Default backlight brightness (percent)"
     range 10 100
-    default 70
+    default 100
     help
         Must align with the HLP configuration slider's 5 percent step.
 
