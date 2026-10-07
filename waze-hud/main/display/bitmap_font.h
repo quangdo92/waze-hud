@@ -30,6 +30,8 @@ public:
     int fontTextWidth(const char *utf8, const assets::BitmapFont &font) const;
     void fontText(int x, int y, const char *utf8, const assets::BitmapFont &font,
                   uint16_t color, int maxWidth = -1, bool centered = false);
+    void fontTextScaled(int x, int y, const char *utf8, const assets::BitmapFont &font,
+                        uint16_t color, float scale, int maxWidth = -1, bool centered = false);
 
     int width() const { return width_; }
     int height() const { return height_; }
