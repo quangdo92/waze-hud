@@ -222,8 +222,9 @@ void drawGuidanceLane(Canvas &canvas, int x, int spacing, const LaneState &lane,
     }
 
     if (hasStraight && hasUTurn) {
-        const int sx = x + 5;
-        const int lx = x - 5;
+        const int shiftX = hasLeft ? 4 : 0;
+        const int sx = x + 5 + shiftX;
+        const int lx = x - 5 + shiftX;
         const int forkY = midY - 2;
 
         canvas.line(sx, baseY, sx, topY, cStraight, stroke);
@@ -240,7 +241,7 @@ void drawGuidanceLane(Canvas &canvas, int x, int spacing, const LaneState &lane,
         drawArrowHeadDir(canvas, lx, midY + 4 + arrowSize, 1, cUTurn, arrowSize);
 
         if (hasLeft) {
-            const int lTip = leftBound - 3;
+            const int lTip = lx - 14;
             const int lBase = lTip + arrowSize;
             canvas.line(lx, forkY, lBase, forkY, cLeft, stroke);
             drawArrowHeadDir(canvas, lTip, forkY, 2, cLeft, arrowSize);
@@ -255,8 +256,9 @@ void drawGuidanceLane(Canvas &canvas, int x, int spacing, const LaneState &lane,
     }
 
     if (hasUTurn && !hasStraight) {
-        const int rx = x + 6;
-        const int lx = x - 6;
+        const int shiftX = hasLeft ? 6 : 0;
+        const int rx = x + 6 + shiftX;
+        const int lx = x - 6 + shiftX;
 
         canvas.line(rx, baseY, rx, topY + 4 + 3, cUTurn, stroke);
         canvas.line(rx, topY + 4 + 3, rx - 3, topY + 4, cUTurn, stroke);
@@ -270,7 +272,7 @@ void drawGuidanceLane(Canvas &canvas, int x, int spacing, const LaneState &lane,
         drawArrowHeadDir(canvas, lx, midY - 4 + arrowSize, 1, cUTurn, arrowSize);
 
         if (hasLeft) {
-            const int lTip = leftBound - 3;
+            const int lTip = lx - 15;
             const int lBase = lTip + arrowSize;
             canvas.line(lx, topY + 4, lBase, topY + 4, cLeft, stroke);
             drawArrowHeadDir(canvas, lTip, topY + 4, 2, cLeft, arrowSize);
@@ -796,11 +798,18 @@ void HudRenderer::render(const HudState &state, const DeviceSettings &settings,
     const int8_t currentClockPhase = currentClockMillis == INT64_MIN
         ? -1 : static_cast<int8_t>((currentClockMillis % 1000LL) < 500LL);
     clockActive_ = state.connected && state.hasProducerState && currentClockSecond != INT64_MIN;
-    const bool streetChanged = firstFrame_ || !sameText(state.currentStreet, previous_.currentStreet);
-    const int availableStreetWidth = 310;
+    const bool streetChanged = firstFrame_ || !sameText(state.currentStreet, previous_.currentStreet) ||
+                               state.navigationActive != previous_.navigationActive;
+    const int availableStreetWidth = 304;
     Canvas metrics(buffer_, layout::Street.width, layout::Street.height);
+    char streetDisplayBuf[180]{};
+    if (state.navigationActive) {
+        std::snprintf(streetDisplayBuf, sizeof(streetDisplayBuf), "HT: %s", displayStreet(state));
+    } else {
+        std::snprintf(streetDisplayBuf, sizeof(streetDisplayBuf), "%s", displayStreet(state));
+    }
     const int streetWidth = settings.showStreet
-        ? metrics.fontTextWidth(displayStreet(state), assets::kTextMedium) : 0;
+        ? metrics.fontTextWidth(streetDisplayBuf, assets::kTextMedium) : 0;
     const bool shouldMarquee = state.connected && state.hasProducerState && settings.showStreet &&
                                streetWidth > availableStreetWidth;
     const uint64_t nowMs = static_cast<uint64_t>(esp_timer_get_time() / 1000);
@@ -1601,20 +1610,32 @@ void HudRenderer::renderStreet(Canvas &canvas, const HudState &state, const Devi
     canvas.clear(colors::Panel);
     const int textY = std::max(0, (layout::StreetHeight - assets::kTextMedium.lineHeight) / 2);
     if (settings.showStreet) {
-        const char *street = displayStreet(state);
+        char streetBuf[180]{};
+        if (state.navigationActive) {
+            std::snprintf(streetBuf, sizeof(streetBuf), "HT: %s", displayStreet(state));
+        } else {
+            std::snprintf(streetBuf, sizeof(streetBuf), "%s", displayStreet(state));
+        }
+
         if (state.laneCount > 0 && state.eta[0] != 0) {
             char etaBuf[16];
             std::snprintf(etaBuf, sizeof(etaBuf), "ETA %s", state.eta.data());
             const int etaW = canvas.fontTextWidth(etaBuf, assets::kTextSmall) + 6;
-            canvas.fontText(6, textY, street, assets::kTextSmall, colors::White, layout::Width - etaW - 14, false);
+            canvas.fontText(8, textY, streetBuf, assets::kTextSmall, colors::White, layout::Width - etaW - 16, false);
             canvas.fontText(layout::Width - etaW - 4, textY, etaBuf, assets::kTextSmall, colors::Cyan, etaW, false);
         } else {
-            if (marqueeActive_)
-                canvas.fontText(5 - marqueeOffset_, textY, street, assets::kTextMedium,
+            if (marqueeActive_) {
+                canvas.fontText(8 - marqueeOffset_, textY, streetBuf, assets::kTextMedium,
                                 colors::White, -1, false);
-            else
-                canvas.fontText(5, textY, street, assets::kTextMedium, colors::White,
-                                310, true);
+            } else {
+                if (state.navigationActive) {
+                    canvas.fontText(8, textY, streetBuf, assets::kTextMedium, colors::White,
+                                    304, false);
+                } else {
+                    canvas.fontText(5, textY, streetBuf, assets::kTextMedium, colors::White,
+                                    310, true);
+                }
+            }
         }
     }
 }
