@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstring>
 
 namespace waze_hud {
@@ -403,6 +404,52 @@ void Canvas::fontText(int x, int y, const char *utf8, const assets::BitmapFont &
 
     for (std::size_t index = 0; index < visible; ++index) drawCodepoint(codepoints[index]);
     if (ellipsis) for (int index = 0; index < 3; ++index) drawCodepoint('.');
+}
+
+void Canvas::fontTextScaled(int x, int y, const char *utf8, const assets::BitmapFont &font,
+                            uint16_t color, float scale, int maxWidth, bool centered) {
+    if (!utf8 || !font.glyphs || !font.bitmap4bpp || scale <= 0.0f) return;
+    if (scale == 1.0f) {
+        fontText(x, y, utf8, font, color, maxWidth, centered);
+        return;
+    }
+
+    std::array<uint32_t, 64> codepoints{};
+    std::size_t count = 0;
+    const char *cursor = utf8;
+    while (*cursor && count < codepoints.size()) codepoints[count++] = nextCodepoint(cursor);
+
+    int unscaledWidth = 0;
+    for (std::size_t index = 0; index < count; ++index)
+        unscaledWidth += codepointWidth(font, codepoints[index]);
+    int drawnWidth = static_cast<int>(std::round(unscaledWidth * scale));
+
+    if (centered && maxWidth > 0) x += (maxWidth - drawnWidth) / 2;
+
+    auto drawCodepointScaled = [&](uint32_t codepoint) {
+        const assets::FontGlyph *glyph = fontGlyph(font, codepoint);
+        if (!glyph) return;
+        const int destW = std::max(1, static_cast<int>(std::round(glyph->width * scale)));
+        const int destH = std::max(1, static_cast<int>(std::round(glyph->height * scale)));
+        const int glyphX = x + static_cast<int>(std::round(glyph->xOffset * scale));
+        const int glyphY = y + static_cast<int>(std::round(glyph->yOffset * scale));
+
+        for (int r = 0; r < destH; ++r) {
+            const int srcRow = std::min<int>(glyph->height - 1, static_cast<int>(r / scale));
+            for (int c = 0; c < destW; ++c) {
+                const int srcCol = std::min<int>(glyph->width - 1, static_cast<int>(c / scale));
+                const std::size_t pixelIndex = static_cast<std::size_t>(srcRow) * glyph->width + srcCol;
+                const uint8_t packed = font.bitmap4bpp[glyph->bitmapOffset + pixelIndex / 2U];
+                const uint8_t nibble = (pixelIndex & 1U) == 0 ? packed >> 4U : packed & 0x0FU;
+                if (nibble != 0) {
+                    alphaPixel(glyphX + c, glyphY + r, color, static_cast<uint8_t>(nibble * 17U));
+                }
+            }
+        }
+        x += static_cast<int>(std::round(glyph->advance * scale));
+    };
+
+    for (std::size_t index = 0; index < count; ++index) drawCodepointScaled(codepoints[index]);
 }
 
 int Canvas::textWidth(const char *utf8, int scale, int maxCells) const {
