@@ -47,20 +47,485 @@ const std::array<uint8_t, 5> &patternFor(char input) {
     return kPatterns[0].columns;
 }
 
-uint32_t nextCodepoint(const char *&text) {
+uint32_t rawNextCodepoint(const char *&text) {
+    if (!text || !*text) return 0;
     const auto first = static_cast<uint8_t>(*text++);
     if (first < 0x80) return first;
     if ((first & 0xE0) == 0xC0) {
+        if (!*text) return first;
         const uint8_t b = static_cast<uint8_t>(*text++);
         return ((first & 0x1F) << 6) | (b & 0x3F);
     }
     if ((first & 0xF0) == 0xE0) {
+        if (!*text || !*(text + 1)) return first;
         const uint8_t b = static_cast<uint8_t>(*text++);
         const uint8_t c = static_cast<uint8_t>(*text++);
         return ((first & 0x0F) << 12) | ((b & 0x3F) << 6) | (c & 0x3F);
     }
     while ((*text & 0xC0) == 0x80) ++text;
     return '?';
+}
+
+constexpr uint32_t composeVietnamese(uint32_t base, uint32_t combining) {
+    switch (base) {
+        case 0x0041: // A
+            switch (combining) {
+                case 0x0300: return 0x00C0; // A + U+0300 -> À
+                case 0x0301: return 0x00C1; // A + U+0301 -> Á
+                case 0x0302: return 0x00C2; // A + U+0302 -> Â
+                case 0x0303: return 0x00C3; // A + U+0303 -> Ã
+                case 0x0306: return 0x0102; // A + U+0306 -> Ă
+                case 0x0309: return 0x1EA2; // A + U+0309 -> Ả
+                case 0x0323: return 0x1EA0; // A + U+0323 -> Ạ
+                default: break;
+            }
+            break;
+        case 0x0044: // D
+            switch (combining) {
+                case 0x0323: return 0x1E0C; // D + U+0323 -> Ḍ
+                default: break;
+            }
+            break;
+        case 0x0045: // E
+            switch (combining) {
+                case 0x0300: return 0x00C8; // E + U+0300 -> È
+                case 0x0301: return 0x00C9; // E + U+0301 -> É
+                case 0x0302: return 0x00CA; // E + U+0302 -> Ê
+                case 0x0303: return 0x1EBC; // E + U+0303 -> Ẽ
+                case 0x0306: return 0x0114; // E + U+0306 -> Ĕ
+                case 0x0309: return 0x1EBA; // E + U+0309 -> Ẻ
+                case 0x0323: return 0x1EB8; // E + U+0323 -> Ẹ
+                default: break;
+            }
+            break;
+        case 0x0049: // I
+            switch (combining) {
+                case 0x0300: return 0x00CC; // I + U+0300 -> Ì
+                case 0x0301: return 0x00CD; // I + U+0301 -> Í
+                case 0x0302: return 0x00CE; // I + U+0302 -> Î
+                case 0x0303: return 0x0128; // I + U+0303 -> Ĩ
+                case 0x0306: return 0x012C; // I + U+0306 -> Ĭ
+                case 0x0309: return 0x1EC8; // I + U+0309 -> Ỉ
+                case 0x0323: return 0x1ECA; // I + U+0323 -> Ị
+                default: break;
+            }
+            break;
+        case 0x004F: // O
+            switch (combining) {
+                case 0x0300: return 0x00D2; // O + U+0300 -> Ò
+                case 0x0301: return 0x00D3; // O + U+0301 -> Ó
+                case 0x0302: return 0x00D4; // O + U+0302 -> Ô
+                case 0x0303: return 0x00D5; // O + U+0303 -> Õ
+                case 0x0306: return 0x014E; // O + U+0306 -> Ŏ
+                case 0x0309: return 0x1ECE; // O + U+0309 -> Ỏ
+                case 0x031B: return 0x01A0; // O + U+031B -> Ơ
+                case 0x0323: return 0x1ECC; // O + U+0323 -> Ọ
+                default: break;
+            }
+            break;
+        case 0x0055: // U
+            switch (combining) {
+                case 0x0300: return 0x00D9; // U + U+0300 -> Ù
+                case 0x0301: return 0x00DA; // U + U+0301 -> Ú
+                case 0x0302: return 0x00DB; // U + U+0302 -> Û
+                case 0x0303: return 0x0168; // U + U+0303 -> Ũ
+                case 0x0306: return 0x016C; // U + U+0306 -> Ŭ
+                case 0x0309: return 0x1EE6; // U + U+0309 -> Ủ
+                case 0x031B: return 0x01AF; // U + U+031B -> Ư
+                case 0x0323: return 0x1EE4; // U + U+0323 -> Ụ
+                default: break;
+            }
+            break;
+        case 0x0059: // Y
+            switch (combining) {
+                case 0x0300: return 0x1EF2; // Y + U+0300 -> Ỳ
+                case 0x0301: return 0x00DD; // Y + U+0301 -> Ý
+                case 0x0302: return 0x0176; // Y + U+0302 -> Ŷ
+                case 0x0303: return 0x1EF8; // Y + U+0303 -> Ỹ
+                case 0x0309: return 0x1EF6; // Y + U+0309 -> Ỷ
+                case 0x0323: return 0x1EF4; // Y + U+0323 -> Ỵ
+                default: break;
+            }
+            break;
+        case 0x0061: // a
+            switch (combining) {
+                case 0x0300: return 0x00E0; // a + U+0300 -> à
+                case 0x0301: return 0x00E1; // a + U+0301 -> á
+                case 0x0302: return 0x00E2; // a + U+0302 -> â
+                case 0x0303: return 0x00E3; // a + U+0303 -> ã
+                case 0x0306: return 0x0103; // a + U+0306 -> ă
+                case 0x0309: return 0x1EA3; // a + U+0309 -> ả
+                case 0x0323: return 0x1EA1; // a + U+0323 -> ạ
+                default: break;
+            }
+            break;
+        case 0x0064: // d
+            switch (combining) {
+                case 0x0323: return 0x1E0D; // d + U+0323 -> ḍ
+                default: break;
+            }
+            break;
+        case 0x0065: // e
+            switch (combining) {
+                case 0x0300: return 0x00E8; // e + U+0300 -> è
+                case 0x0301: return 0x00E9; // e + U+0301 -> é
+                case 0x0302: return 0x00EA; // e + U+0302 -> ê
+                case 0x0303: return 0x1EBD; // e + U+0303 -> ẽ
+                case 0x0306: return 0x0115; // e + U+0306 -> ĕ
+                case 0x0309: return 0x1EBB; // e + U+0309 -> ẻ
+                case 0x0323: return 0x1EB9; // e + U+0323 -> ẹ
+                default: break;
+            }
+            break;
+        case 0x0069: // i
+            switch (combining) {
+                case 0x0300: return 0x00EC; // i + U+0300 -> ì
+                case 0x0301: return 0x00ED; // i + U+0301 -> í
+                case 0x0302: return 0x00EE; // i + U+0302 -> î
+                case 0x0303: return 0x0129; // i + U+0303 -> ĩ
+                case 0x0306: return 0x012D; // i + U+0306 -> ĭ
+                case 0x0309: return 0x1EC9; // i + U+0309 -> ỉ
+                case 0x0323: return 0x1ECB; // i + U+0323 -> ị
+                default: break;
+            }
+            break;
+        case 0x006F: // o
+            switch (combining) {
+                case 0x0300: return 0x00F2; // o + U+0300 -> ò
+                case 0x0301: return 0x00F3; // o + U+0301 -> ó
+                case 0x0302: return 0x00F4; // o + U+0302 -> ô
+                case 0x0303: return 0x00F5; // o + U+0303 -> õ
+                case 0x0306: return 0x014F; // o + U+0306 -> ŏ
+                case 0x0309: return 0x1ECF; // o + U+0309 -> ỏ
+                case 0x031B: return 0x01A1; // o + U+031B -> ơ
+                case 0x0323: return 0x1ECD; // o + U+0323 -> ọ
+                default: break;
+            }
+            break;
+        case 0x0075: // u
+            switch (combining) {
+                case 0x0300: return 0x00F9; // u + U+0300 -> ù
+                case 0x0301: return 0x00FA; // u + U+0301 -> ú
+                case 0x0302: return 0x00FB; // u + U+0302 -> û
+                case 0x0303: return 0x0169; // u + U+0303 -> ũ
+                case 0x0306: return 0x016D; // u + U+0306 -> ŭ
+                case 0x0309: return 0x1EE7; // u + U+0309 -> ủ
+                case 0x031B: return 0x01B0; // u + U+031B -> ư
+                case 0x0323: return 0x1EE5; // u + U+0323 -> ụ
+                default: break;
+            }
+            break;
+        case 0x0079: // y
+            switch (combining) {
+                case 0x0300: return 0x1EF3; // y + U+0300 -> ỳ
+                case 0x0301: return 0x00FD; // y + U+0301 -> ý
+                case 0x0302: return 0x0177; // y + U+0302 -> ŷ
+                case 0x0303: return 0x1EF9; // y + U+0303 -> ỹ
+                case 0x0309: return 0x1EF7; // y + U+0309 -> ỷ
+                case 0x0323: return 0x1EF5; // y + U+0323 -> ỵ
+                default: break;
+            }
+            break;
+        case 0x00C2: // Â
+            switch (combining) {
+                case 0x0300: return 0x1EA6; // Â + U+0300 -> Ầ
+                case 0x0301: return 0x1EA4; // Â + U+0301 -> Ấ
+                case 0x0303: return 0x1EAA; // Â + U+0303 -> Ẫ
+                case 0x0309: return 0x1EA8; // Â + U+0309 -> Ẩ
+                case 0x0323: return 0x1EAC; // Â + U+0323 -> Ậ
+                default: break;
+            }
+            break;
+        case 0x00CA: // Ê
+            switch (combining) {
+                case 0x0300: return 0x1EC0; // Ê + U+0300 -> Ề
+                case 0x0301: return 0x1EBE; // Ê + U+0301 -> Ế
+                case 0x0303: return 0x1EC4; // Ê + U+0303 -> Ễ
+                case 0x0309: return 0x1EC2; // Ê + U+0309 -> Ể
+                case 0x0323: return 0x1EC6; // Ê + U+0323 -> Ệ
+                default: break;
+            }
+            break;
+        case 0x00D2: // Ò
+            switch (combining) {
+                case 0x031B: return 0x1EDC; // Ò + U+031B -> Ờ
+                default: break;
+            }
+            break;
+        case 0x00D3: // Ó
+            switch (combining) {
+                case 0x031B: return 0x1EDA; // Ó + U+031B -> Ớ
+                default: break;
+            }
+            break;
+        case 0x00D4: // Ô
+            switch (combining) {
+                case 0x0300: return 0x1ED2; // Ô + U+0300 -> Ồ
+                case 0x0301: return 0x1ED0; // Ô + U+0301 -> Ố
+                case 0x0303: return 0x1ED6; // Ô + U+0303 -> Ỗ
+                case 0x0309: return 0x1ED4; // Ô + U+0309 -> Ổ
+                case 0x0323: return 0x1ED8; // Ô + U+0323 -> Ộ
+                default: break;
+            }
+            break;
+        case 0x00D5: // Õ
+            switch (combining) {
+                case 0x0301: return 0x1E4C; // Õ + U+0301 -> Ṍ
+                case 0x031B: return 0x1EE0; // Õ + U+031B -> Ỡ
+                default: break;
+            }
+            break;
+        case 0x00D9: // Ù
+            switch (combining) {
+                case 0x031B: return 0x1EEA; // Ù + U+031B -> Ừ
+                default: break;
+            }
+            break;
+        case 0x00DA: // Ú
+            switch (combining) {
+                case 0x031B: return 0x1EE8; // Ú + U+031B -> Ứ
+                default: break;
+            }
+            break;
+        case 0x00E2: // â
+            switch (combining) {
+                case 0x0300: return 0x1EA7; // â + U+0300 -> ầ
+                case 0x0301: return 0x1EA5; // â + U+0301 -> ấ
+                case 0x0303: return 0x1EAB; // â + U+0303 -> ẫ
+                case 0x0309: return 0x1EA9; // â + U+0309 -> ẩ
+                case 0x0323: return 0x1EAD; // â + U+0323 -> ậ
+                default: break;
+            }
+            break;
+        case 0x00EA: // ê
+            switch (combining) {
+                case 0x0300: return 0x1EC1; // ê + U+0300 -> ề
+                case 0x0301: return 0x1EBF; // ê + U+0301 -> ế
+                case 0x0303: return 0x1EC5; // ê + U+0303 -> ễ
+                case 0x0309: return 0x1EC3; // ê + U+0309 -> ể
+                case 0x0323: return 0x1EC7; // ê + U+0323 -> ệ
+                default: break;
+            }
+            break;
+        case 0x00F2: // ò
+            switch (combining) {
+                case 0x031B: return 0x1EDD; // ò + U+031B -> ờ
+                default: break;
+            }
+            break;
+        case 0x00F3: // ó
+            switch (combining) {
+                case 0x031B: return 0x1EDB; // ó + U+031B -> ớ
+                default: break;
+            }
+            break;
+        case 0x00F4: // ô
+            switch (combining) {
+                case 0x0300: return 0x1ED3; // ô + U+0300 -> ồ
+                case 0x0301: return 0x1ED1; // ô + U+0301 -> ố
+                case 0x0303: return 0x1ED7; // ô + U+0303 -> ỗ
+                case 0x0309: return 0x1ED5; // ô + U+0309 -> ổ
+                case 0x0323: return 0x1ED9; // ô + U+0323 -> ộ
+                default: break;
+            }
+            break;
+        case 0x00F5: // õ
+            switch (combining) {
+                case 0x0301: return 0x1E4D; // õ + U+0301 -> ṍ
+                case 0x031B: return 0x1EE1; // õ + U+031B -> ỡ
+                default: break;
+            }
+            break;
+        case 0x00F9: // ù
+            switch (combining) {
+                case 0x031B: return 0x1EEB; // ù + U+031B -> ừ
+                default: break;
+            }
+            break;
+        case 0x00FA: // ú
+            switch (combining) {
+                case 0x031B: return 0x1EE9; // ú + U+031B -> ứ
+                default: break;
+            }
+            break;
+        case 0x0102: // Ă
+            switch (combining) {
+                case 0x0300: return 0x1EB0; // Ă + U+0300 -> Ằ
+                case 0x0301: return 0x1EAE; // Ă + U+0301 -> Ắ
+                case 0x0303: return 0x1EB4; // Ă + U+0303 -> Ẵ
+                case 0x0309: return 0x1EB2; // Ă + U+0309 -> Ẳ
+                case 0x0323: return 0x1EB6; // Ă + U+0323 -> Ặ
+                default: break;
+            }
+            break;
+        case 0x0103: // ă
+            switch (combining) {
+                case 0x0300: return 0x1EB1; // ă + U+0300 -> ằ
+                case 0x0301: return 0x1EAF; // ă + U+0301 -> ắ
+                case 0x0303: return 0x1EB5; // ă + U+0303 -> ẵ
+                case 0x0309: return 0x1EB3; // ă + U+0309 -> ẳ
+                case 0x0323: return 0x1EB7; // ă + U+0323 -> ặ
+                default: break;
+            }
+            break;
+        case 0x0168: // Ũ
+            switch (combining) {
+                case 0x0301: return 0x1E78; // Ũ + U+0301 -> Ṹ
+                case 0x031B: return 0x1EEE; // Ũ + U+031B -> Ữ
+                default: break;
+            }
+            break;
+        case 0x0169: // ũ
+            switch (combining) {
+                case 0x0301: return 0x1E79; // ũ + U+0301 -> ṹ
+                case 0x031B: return 0x1EEF; // ũ + U+031B -> ữ
+                default: break;
+            }
+            break;
+        case 0x01A0: // Ơ
+            switch (combining) {
+                case 0x0300: return 0x1EDC; // Ơ + U+0300 -> Ờ
+                case 0x0301: return 0x1EDA; // Ơ + U+0301 -> Ớ
+                case 0x0303: return 0x1EE0; // Ơ + U+0303 -> Ỡ
+                case 0x0309: return 0x1EDE; // Ơ + U+0309 -> Ở
+                case 0x0323: return 0x1EE2; // Ơ + U+0323 -> Ợ
+                default: break;
+            }
+            break;
+        case 0x01A1: // ơ
+            switch (combining) {
+                case 0x0300: return 0x1EDD; // ơ + U+0300 -> ờ
+                case 0x0301: return 0x1EDB; // ơ + U+0301 -> ớ
+                case 0x0303: return 0x1EE1; // ơ + U+0303 -> ỡ
+                case 0x0309: return 0x1EDF; // ơ + U+0309 -> ở
+                case 0x0323: return 0x1EE3; // ơ + U+0323 -> ợ
+                default: break;
+            }
+            break;
+        case 0x01AF: // Ư
+            switch (combining) {
+                case 0x0300: return 0x1EEA; // Ư + U+0300 -> Ừ
+                case 0x0301: return 0x1EE8; // Ư + U+0301 -> Ứ
+                case 0x0303: return 0x1EEE; // Ư + U+0303 -> Ữ
+                case 0x0309: return 0x1EEC; // Ư + U+0309 -> Ử
+                case 0x0323: return 0x1EF0; // Ư + U+0323 -> Ự
+                default: break;
+            }
+            break;
+        case 0x01B0: // ư
+            switch (combining) {
+                case 0x0300: return 0x1EEB; // ư + U+0300 -> ừ
+                case 0x0301: return 0x1EE9; // ư + U+0301 -> ứ
+                case 0x0303: return 0x1EEF; // ư + U+0303 -> ữ
+                case 0x0309: return 0x1EED; // ư + U+0309 -> ử
+                case 0x0323: return 0x1EF1; // ư + U+0323 -> ự
+                default: break;
+            }
+            break;
+        case 0x1EA0: // Ạ
+            switch (combining) {
+                case 0x0302: return 0x1EAC; // Ạ + U+0302 -> Ậ
+                case 0x0306: return 0x1EB6; // Ạ + U+0306 -> Ặ
+                default: break;
+            }
+            break;
+        case 0x1EA1: // ạ
+            switch (combining) {
+                case 0x0302: return 0x1EAD; // ạ + U+0302 -> ậ
+                case 0x0306: return 0x1EB7; // ạ + U+0306 -> ặ
+                default: break;
+            }
+            break;
+        case 0x1EB8: // Ẹ
+            switch (combining) {
+                case 0x0302: return 0x1EC6; // Ẹ + U+0302 -> Ệ
+                default: break;
+            }
+            break;
+        case 0x1EB9: // ẹ
+            switch (combining) {
+                case 0x0302: return 0x1EC7; // ẹ + U+0302 -> ệ
+                default: break;
+            }
+            break;
+        case 0x1ECC: // Ọ
+            switch (combining) {
+                case 0x0302: return 0x1ED8; // Ọ + U+0302 -> Ộ
+                case 0x031B: return 0x1EE2; // Ọ + U+031B -> Ợ
+                default: break;
+            }
+            break;
+        case 0x1ECD: // ọ
+            switch (combining) {
+                case 0x0302: return 0x1ED9; // ọ + U+0302 -> ộ
+                case 0x031B: return 0x1EE3; // ọ + U+031B -> ợ
+                default: break;
+            }
+            break;
+        case 0x1ECE: // Ỏ
+            switch (combining) {
+                case 0x031B: return 0x1EDE; // Ỏ + U+031B -> Ở
+                default: break;
+            }
+            break;
+        case 0x1ECF: // ỏ
+            switch (combining) {
+                case 0x031B: return 0x1EDF; // ỏ + U+031B -> ở
+                default: break;
+            }
+            break;
+        case 0x1EE4: // Ụ
+            switch (combining) {
+                case 0x031B: return 0x1EF0; // Ụ + U+031B -> Ự
+                default: break;
+            }
+            break;
+        case 0x1EE5: // ụ
+            switch (combining) {
+                case 0x031B: return 0x1EF1; // ụ + U+031B -> ự
+                default: break;
+            }
+            break;
+        case 0x1EE6: // Ủ
+            switch (combining) {
+                case 0x031B: return 0x1EEC; // Ủ + U+031B -> Ử
+                default: break;
+            }
+            break;
+        case 0x1EE7: // ủ
+            switch (combining) {
+                case 0x031B: return 0x1EED; // ủ + U+031B -> ử
+                default: break;
+            }
+            break;
+        default: break;
+    }
+    return 0;
+}
+
+uint32_t nextCodepoint(const char *&text) {
+    uint32_t cp = rawNextCodepoint(text);
+    if (cp == 0) return 0;
+
+    while (cp >= 0x0300 && cp <= 0x036F) {
+        cp = rawNextCodepoint(text);
+        if (cp == 0) return 0;
+    }
+
+    while (text && *text != 0) {
+        const char *peek = text;
+        const uint32_t nextCp = rawNextCodepoint(peek);
+        if (nextCp >= 0x0300 && nextCp <= 0x036F) {
+            text = peek;
+            const uint32_t composed = composeVietnamese(cp, nextCp);
+            if (composed != 0) {
+                cp = composed;
+            }
+        } else {
+            break;
+        }
+    }
+    return cp;
 }
 
 DecodedGlyph decodeVietnamese(uint32_t cp) {

@@ -198,6 +198,8 @@ extern const BitmapFont kTextLarge;
 extern const BitmapFont kNumberSmall;
 extern const BitmapFont kNumberMedium;
 extern const BitmapFont kNumberLarge;
+extern const BitmapFont kNumberSpeedLimit;
+extern const BitmapFont kNumberSpeedLimit3;
 
 extern const SpeedLimitAssetSet kSpeedLimitAssets[];
 extern const std::size_t kSpeedLimitAssetCount;
