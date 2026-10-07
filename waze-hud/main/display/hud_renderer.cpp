@@ -232,17 +232,18 @@ void drawGuidanceLane(Canvas &canvas, int x, int spacing, const LaneState &lane,
         canvas.line(sx, forkY + 3, sx - 3, forkY, cUTurn, stroke);
         canvas.line(sx - 3, forkY, lx + 3, forkY, cUTurn, stroke);
         canvas.line(lx + 3, forkY, lx, forkY + 3, cUTurn, stroke);
-        canvas.line(lx, forkY + 3, lx, midY + 14, cUTurn, stroke);
+        canvas.line(lx, forkY + 3, lx, midY + 4, cUTurn, stroke);
         canvas.fillCircle(sx, forkY + 3, stroke / 2, cUTurn);
         canvas.fillCircle(sx - 3, forkY, stroke / 2, cUTurn);
         canvas.fillCircle(lx + 3, forkY, stroke / 2, cUTurn);
         canvas.fillCircle(lx, forkY + 3, stroke / 2, cUTurn);
-        drawArrowHeadDir(canvas, lx, midY + 14 + arrowSize, 1, cUTurn, arrowSize);
+        drawArrowHeadDir(canvas, lx, midY + 4 + arrowSize, 1, cUTurn, arrowSize);
 
         if (hasLeft) {
-            const int lBase = leftBound + arrowSize;
+            const int lTip = leftBound - 3;
+            const int lBase = lTip + arrowSize;
             canvas.line(lx, forkY, lBase, forkY, cLeft, stroke);
-            drawArrowHeadDir(canvas, leftBound, forkY, 2, cLeft, arrowSize);
+            drawArrowHeadDir(canvas, lTip, forkY, 2, cLeft, arrowSize);
         }
 
         if (hasRight) {
@@ -261,17 +262,18 @@ void drawGuidanceLane(Canvas &canvas, int x, int spacing, const LaneState &lane,
         canvas.line(rx, topY + 4 + 3, rx - 3, topY + 4, cUTurn, stroke);
         canvas.line(rx - 3, topY + 4, lx + 3, topY + 4, cUTurn, stroke);
         canvas.line(lx + 3, topY + 4, lx, topY + 4 + 3, cUTurn, stroke);
-        canvas.line(lx, topY + 4 + 3, lx, midY + 14, cUTurn, stroke);
+        canvas.line(lx, topY + 4 + 3, lx, midY - 4, cUTurn, stroke);
         canvas.fillCircle(rx, topY + 4 + 3, stroke / 2, cUTurn);
         canvas.fillCircle(rx - 3, topY + 4, stroke / 2, cUTurn);
         canvas.fillCircle(lx + 3, topY + 4, stroke / 2, cUTurn);
         canvas.fillCircle(lx, topY + 4 + 3, stroke / 2, cUTurn);
-        drawArrowHeadDir(canvas, lx, midY + 14 + arrowSize, 1, cUTurn, arrowSize);
+        drawArrowHeadDir(canvas, lx, midY - 4 + arrowSize, 1, cUTurn, arrowSize);
 
         if (hasLeft) {
-            const int lBase = leftBound + arrowSize;
+            const int lTip = leftBound - 3;
+            const int lBase = lTip + arrowSize;
             canvas.line(lx, topY + 4, lBase, topY + 4, cLeft, stroke);
-            drawArrowHeadDir(canvas, leftBound, topY + 4, 2, cLeft, arrowSize);
+            drawArrowHeadDir(canvas, lTip, topY + 4, 2, cLeft, arrowSize);
         }
 
         if (hasRight) {
