@@ -891,9 +891,13 @@ void HudRenderer::render(const HudState &state, const DeviceSettings &settings,
                                state.navigationActive != previous_.navigationActive;
     const bool configChanged = firstFrame_ || hasSettingsChanged(settings, previousSettings_);
     uint8_t targetBrightness = settings.brightness;
-    if (currentClockMinute != INT64_MIN) {
-        const int normalizedMinute = static_cast<int>((currentClockMinute % 1440 + 1440) % 1440);
-        targetBrightness = calculateTimeOfDayBrightness(normalizedMinute, settings.brightness > 30 ? settings.brightness : 100);
+    if (settings.theme == UiTheme::Night) {
+        targetBrightness = std::min(settings.brightness, static_cast<uint8_t>(30));
+    } else if (settings.theme == UiTheme::Auto) {
+        if (currentClockMinute != INT64_MIN) {
+            const int normalizedMinute = static_cast<int>((currentClockMinute % 1440 + 1440) % 1440);
+            targetBrightness = calculateTimeOfDayBrightness(normalizedMinute, settings.brightness > 30 ? settings.brightness : 100);
+        }
     }
 
     if (firstFrame_ || targetBrightness != currentAppliedBrightness_) {
@@ -1278,14 +1282,20 @@ void HudRenderer::renderSpeedCluster(Canvas &canvas, const HudState &state,
     constexpr int badgeH = 32;
 #endif
 
-    // Kiểm tra giờ giảm độ sáng (Ban đêm: từ 17:30 chiều đến 06:00 sáng)
+    // Kiểm tra chế độ ban đêm: Tuân theo Giao diện (Theme) từ cấu hình hoặc giờ tự động
     bool isNight = false;
-    const int64_t clockMs = localClockMillis(state);
-    if (clockMs != INT64_MIN) {
-        const int64_t minute = (clockMs / 1000LL) / 60;
-        const int normMin = static_cast<int>((minute % 1440 + 1440) % 1440);
-        // Khung giờ giảm độ sáng: 17:30 -> 06:00
-        isNight = (normMin >= 17 * 60 + 30 || normMin < 6 * 60);
+    if (settings.theme == UiTheme::Night) {
+        isNight = true;
+    } else if (settings.theme == UiTheme::Day) {
+        isNight = false;
+    } else {
+        const int64_t clockMs = localClockMillis(state);
+        if (clockMs != INT64_MIN) {
+            const int64_t minute = (clockMs / 1000LL) / 60;
+            const int normMin = static_cast<int>((minute % 1440 + 1440) % 1440);
+            // Khung giờ giảm độ sáng tự động: 17:30 -> 06:00
+            isNight = (normMin >= 17 * 60 + 30 || normMin < 6 * 60);
+        }
     }
 
     const uint16_t signBgColor = isNight ? colors::Panel : colors::White;

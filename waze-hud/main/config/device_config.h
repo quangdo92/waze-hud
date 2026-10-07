@@ -11,7 +11,7 @@ enum class UiTheme : uint8_t { Auto, Day, Night };
 enum class SpeedDisplayMode : uint8_t { CurrentPrimary, LimitPrimary };
 
 struct DeviceSettings {
-    uint8_t brightness{70};
+    uint8_t brightness{100};
     UiTheme theme{UiTheme::Auto};
     SpeedDisplayMode speedDisplayMode{SpeedDisplayMode::LimitPrimary};
     bool showStreet{true};
