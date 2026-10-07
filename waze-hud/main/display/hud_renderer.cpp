@@ -1388,14 +1388,6 @@ void HudRenderer::renderAlerts(Canvas &canvas, const HudState &state, const Devi
             canvas.fontText(1, mainY(86), trafficDetail, assets::kTextSmall,
                             trafficSeverityColor(primary.trafficSeverity), 93, true);
 #endif
-        } else if (primary.valueKmh > 0) {
-            char valBuf[32];
-            std::snprintf(valBuf, sizeof(valBuf), "G/H: %d km/h", primary.valueKmh);
-#if CONFIG_WAZE_HUD_DISPLAY_CYD_28
-            canvas.fontText(1, 96, valBuf, assets::kTextSmall, colors::Amber, 93, true);
-#else
-            canvas.fontText(1, mainY(86), valBuf, assets::kTextSmall, colors::Amber, 93, true);
-#endif
         }
     } else {
         // TRẠNG THÁI 2: Đang có lane (Thanh đáy bận hiển thị mũi tên phân làn)
@@ -1436,16 +1428,6 @@ void HudRenderer::renderAlerts(Canvas &canvas, const HudState &state, const Devi
             const int labelY = hasSecondary ? mainY(74) : mainY(86);
             canvas.fontText(1, labelY, trafficDetail, assets::kTextSmall,
                             trafficSeverityColor(primary.trafficSeverity), 93, true);
-#endif
-        } else if (primary.valueKmh > 0) {
-            char valBuf[32];
-            std::snprintf(valBuf, sizeof(valBuf), "G/H: %d km/h", primary.valueKmh);
-#if CONFIG_WAZE_HUD_DISPLAY_CYD_28
-            const int labelY = hasSecondary ? 78 : 96;
-            canvas.fontText(1, labelY, valBuf, assets::kTextSmall, colors::Amber, 93, true);
-#else
-            const int labelY = hasSecondary ? mainY(74) : mainY(86);
-            canvas.fontText(1, labelY, valBuf, assets::kTextSmall, colors::Amber, 93, true);
 #endif
         }
 
