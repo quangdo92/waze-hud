@@ -6,6 +6,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 
@@ -945,7 +946,8 @@ void HudRenderer::render(const HudState &state, const DeviceSettings &settings,
         }
         const bool speedClusterChanged = state.speedKmh != previous_.speedKmh ||
                                         state.speedLimitKmh != previous_.speedLimitKmh ||
-                                        state.overSpeed != previous_.overSpeed;
+                                        state.overSpeed != previous_.overSpeed ||
+                                        currentClockMinute != renderedClockMinute_;
         if (speedClusterChanged)
             renderRegion(layout::SpeedCluster, state, settings, systemStatus);
         const bool laneStateSwapped = (state.laneCount > 0) != (previous_.laneCount > 0);
@@ -1276,22 +1278,40 @@ void HudRenderer::renderSpeedCluster(Canvas &canvas, const HudState &state,
     constexpr int badgeH = 32;
 #endif
 
+    // Kiểm tra giờ giảm độ sáng (Ban đêm: từ 17:30 chiều đến 06:00 sáng)
+    bool isNight = false;
+    const int64_t clockMs = localClockMillis(state);
+    if (clockMs != INT64_MIN) {
+        const int64_t minute = (clockMs / 1000LL) / 60;
+        const int normMin = static_cast<int>((minute % 1440 + 1440) % 1440);
+        // Khung giờ giảm độ sáng: 17:30 -> 06:00
+        isNight = (normMin >= 17 * 60 + 30 || normMin < 6 * 60);
+    }
+
+    const uint16_t signBgColor = isNight ? colors::Panel : colors::White;
+    const uint16_t signTextColor = isNight ? colors::White : colors::Black;
+
     canvas.fillCircle(signX, signY, outerRadius, colors::Red);
-    canvas.fillCircle(signX, signY, innerRadius, colors::White);
+    canvas.fillCircle(signX, signY, innerRadius, signBgColor);
 
     if (state.speedLimitKmh > 0) {
         char limit[16];
         std::snprintf(limit, sizeof(limit), "%d", state.speedLimitKmh);
-        const auto &font = (state.speedLimitKmh >= 100) ? assets::kNumberMedium : assets::kNumberLarge;
-        canvas.fontText(signX - innerRadius,
-                        signY - font.lineHeight / 2 - 1,
-                        limit, font, colors::Black,
-                        innerRadius * 2, true);
+        // Tốc độ >= 100 (3 chữ số): scale vừa vặn ~1.05x để không tràn viền đỏ
+        // Tốc độ < 100 (2 chữ số): phóng to 1.45x để số cực kỳ TO và rõ ràng!
+        const float fontScale = (state.speedLimitKmh >= 100) ? 1.05f : 1.45f;
+        const int scaledHeight = static_cast<int>(std::round(assets::kNumberLarge.lineHeight * fontScale));
+        canvas.fontTextScaled(signX - innerRadius,
+                              signY - scaledHeight / 2 - 1,
+                              limit, assets::kNumberLarge, signTextColor,
+                              fontScale, innerRadius * 2, true);
     } else {
-        canvas.fontText(signX - innerRadius,
-                        signY - assets::kNumberLarge.lineHeight / 2 - 1,
-                        "?", assets::kNumberLarge, colors::Black,
-                        innerRadius * 2, true);
+        constexpr float fontScale = 1.35f;
+        const int scaledHeight = static_cast<int>(std::round(assets::kNumberLarge.lineHeight * fontScale));
+        canvas.fontTextScaled(signX - innerRadius,
+                              signY - scaledHeight / 2 - 1,
+                              "?", assets::kNumberLarge, signTextColor,
+                              fontScale, innerRadius * 2, true);
     }
 
     // Car speed badge in bottom-right corner
