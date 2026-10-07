@@ -1297,21 +1297,14 @@ void HudRenderer::renderSpeedCluster(Canvas &canvas, const HudState &state,
     if (state.speedLimitKmh > 0) {
         char limit[16];
         std::snprintf(limit, sizeof(limit), "%d", state.speedLimitKmh);
-        // Tốc độ >= 100 (3 chữ số): scale vừa vặn ~1.05x để không tràn viền đỏ
-        // Tốc độ < 100 (2 chữ số): phóng to 1.45x để số cực kỳ TO và rõ ràng!
-        const float fontScale = (state.speedLimitKmh >= 100) ? 1.05f : 1.45f;
-        const int scaledHeight = static_cast<int>(std::round(assets::kNumberLarge.lineHeight * fontScale));
-        canvas.fontTextScaled(signX - innerRadius,
-                              signY - scaledHeight / 2 - 1,
-                              limit, assets::kNumberLarge, signTextColor,
-                              fontScale, innerRadius * 2, true);
+        // Tốc độ >= 100 (3 chữ số): font kNumberSpeedLimit3 (size 36) chuẩn nét, không chạm viền
+        // Tốc độ < 100 (2 chữ số): font kNumberSpeedLimit (size 48) số TO đậm, sắc nét 100% native TrueType
+        const auto &speedFont = (state.speedLimitKmh >= 100) ? assets::kNumberSpeedLimit3 : assets::kNumberSpeedLimit;
+        canvas.fontText(signX - innerRadius, signY - speedFont.lineHeight / 2 - 1,
+                        limit, speedFont, signTextColor, innerRadius * 2, true);
     } else {
-        constexpr float fontScale = 1.35f;
-        const int scaledHeight = static_cast<int>(std::round(assets::kNumberLarge.lineHeight * fontScale));
-        canvas.fontTextScaled(signX - innerRadius,
-                              signY - scaledHeight / 2 - 1,
-                              "?", assets::kNumberLarge, signTextColor,
-                              fontScale, innerRadius * 2, true);
+        canvas.fontText(signX - innerRadius, signY - assets::kNumberSpeedLimit.lineHeight / 2 - 1,
+                        "?", assets::kNumberSpeedLimit, signTextColor, innerRadius * 2, true);
     }
 
     // Car speed badge in bottom-right corner
