@@ -200,12 +200,37 @@ static void drawFillTriangle(Canvas &canvas, int x0, int y0, int x1, int y1, int
     }
 }
 
-static void drawArrowHeadDiag(Canvas &canvas, int tipX, int tipY, bool isRight, uint16_t color, int size = 8) {
-    if (isRight) {
-        drawFillTriangle(canvas, tipX, tipY, tipX - size, tipY + size / 2, tipX - size / 2, tipY + size + 1, color);
-    } else {
-        drawFillTriangle(canvas, tipX, tipY, tipX + size, tipY + size / 2, tipX + size / 2, tipY + size + 1, color);
-    }
+struct ArrowBase { int x; int y; };
+
+static ArrowBase drawArrow45(Canvas &canvas, int tipX, int tipY, bool isRight, uint16_t color,
+                             int length = 8, int width = 12, float notch = 2.0f) {
+    const float angleDeg = isRight ? 48.0f : -48.0f;
+    constexpr float kDegToRad = 3.14159265f / 180.0f;
+    const float rad = angleDeg * kDegToRad;
+    const float ux = std::sin(rad);
+    const float uy = -std::cos(rad);
+    const float vx = std::cos(rad);
+    const float vy = std::sin(rad);
+
+    const float bx = static_cast<float>(tipX) - static_cast<float>(length) * ux;
+    const float by = static_cast<float>(tipY) - static_cast<float>(length) * uy;
+
+    const float nx = bx + notch * ux;
+    const float ny = by + notch * uy;
+
+    const float w2 = static_cast<float>(width) / 2.0f;
+    const int wLx = static_cast<int>(std::round(bx - w2 * vx));
+    const int wLy = static_cast<int>(std::round(by - w2 * vy));
+    const int wRx = static_cast<int>(std::round(bx + w2 * vx));
+    const int wRy = static_cast<int>(std::round(by + w2 * vy));
+
+    const int notchX = static_cast<int>(std::round(nx));
+    const int notchY = static_cast<int>(std::round(ny));
+
+    drawFillTriangle(canvas, tipX, tipY, wLx, wLy, notchX, notchY, color);
+    drawFillTriangle(canvas, tipX, tipY, wRx, wRy, notchX, notchY, color);
+
+    return {static_cast<int>(std::round(bx)), static_cast<int>(std::round(by))};
 }
 
 static void drawQuadCurve(Canvas &canvas, int x0, int y0, int x1, int y1, int x2, int y2, uint16_t color, int thickness = 4) {
@@ -338,8 +363,8 @@ void drawGuidanceLane(Canvas &canvas, int x, int spacing, const LaneState &lane,
         canvas.fillCircle(rx - 3, topY + 4, stroke / 2, cLeft);
         drawArrowHeadDir(canvas, leftBound, topY + 4, 2, cLeft, arrowSize);
         if (hasSlightLeft) {
-            drawQuadCurve(canvas, rx, midY + 12, rx - 2, midY - 2, x - 2, topY + 11, cSlightLeft, stroke);
-            drawArrowHeadDiag(canvas, x - 2, topY + 7, false, cSlightLeft, 7);
+            const ArrowBase base = drawArrow45(canvas, x - 2, topY + 7, false, cSlightLeft);
+            drawQuadCurve(canvas, rx, midY + 12, rx - 2, midY - 2, base.x, base.y, cSlightLeft, stroke);
         }
         return;
     }
@@ -354,8 +379,8 @@ void drawGuidanceLane(Canvas &canvas, int x, int spacing, const LaneState &lane,
         canvas.fillCircle(lx + 3, topY + 4, stroke / 2, cRight);
         drawArrowHeadDir(canvas, rightBound, topY + 4, 3, cRight, arrowSize);
         if (hasSlightRight) {
-            drawQuadCurve(canvas, lx, midY + 12, lx + 2, midY - 2, x + 2, topY + 11, cSlightRight, stroke);
-            drawArrowHeadDiag(canvas, x + 2, topY + 7, true, cSlightRight, 7);
+            const ArrowBase base = drawArrow45(canvas, x + 2, topY + 7, true, cSlightRight);
+            drawQuadCurve(canvas, lx, midY + 12, lx + 2, midY - 2, base.x, base.y, cSlightRight, stroke);
         }
         return;
     }
@@ -373,8 +398,8 @@ void drawGuidanceLane(Canvas &canvas, int x, int spacing, const LaneState &lane,
             canvas.fillCircle(x - 3, midY, stroke / 2, cLeft);
             drawArrowHeadDir(canvas, leftBound, midY, 2, cLeft, arrowSize);
         } else if (hasSlightLeft) {
-            drawQuadCurve(canvas, x, midY + 12, x - 2, midY - 2, x - 13, topY + 11, cSlightLeft, stroke);
-            drawArrowHeadDiag(canvas, x - 13, topY + 7, false, cSlightLeft, 7);
+            const ArrowBase base = drawArrow45(canvas, x - 13, topY + 8, false, cSlightLeft);
+            drawQuadCurve(canvas, x, midY + 18, x - 3, midY, base.x, base.y, cSlightLeft, stroke);
         }
 
         if (hasRight) {
@@ -385,32 +410,32 @@ void drawGuidanceLane(Canvas &canvas, int x, int spacing, const LaneState &lane,
             canvas.fillCircle(x + 3, midY, stroke / 2, cRight);
             drawArrowHeadDir(canvas, rightBound, midY, 3, cRight, arrowSize);
         } else if (hasSlightRight) {
-            drawQuadCurve(canvas, x, midY + 12, x + 2, midY - 2, x + 13, topY + 11, cSlightRight, stroke);
-            drawArrowHeadDiag(canvas, x + 13, topY + 7, true, cSlightRight, 7);
+            const ArrowBase base = drawArrow45(canvas, x + 13, topY + 8, true, cSlightRight);
+            drawQuadCurve(canvas, x, midY + 18, x + 3, midY, base.x, base.y, cSlightRight, stroke);
         }
         return;
     }
 
     if (hasSlightLeft && !hasSlightRight && !hasRight) {
+        const ArrowBase base = drawArrow45(canvas, x - 9, topY + 2, false, cSlightLeft);
         canvas.line(x + 5, baseY, x + 5, midY + 10, cSlightLeft, stroke);
-        drawQuadCurve(canvas, x + 5, midY + 10, x + 4, midY - 4, x - 9, topY + 4, cSlightLeft, stroke);
-        drawArrowHeadDiag(canvas, x - 9, topY, false, cSlightLeft, 8);
+        drawQuadCurve(canvas, x + 5, midY + 10, x + 4, midY - 2, base.x, base.y, cSlightLeft, stroke);
         return;
     }
 
     if (hasSlightRight && !hasSlightLeft && !hasLeft) {
+        const ArrowBase base = drawArrow45(canvas, x + 9, topY + 2, true, cSlightRight);
         canvas.line(x - 5, baseY, x - 5, midY + 10, cSlightRight, stroke);
-        drawQuadCurve(canvas, x - 5, midY + 10, x - 4, midY - 4, x + 9, topY + 4, cSlightRight, stroke);
-        drawArrowHeadDiag(canvas, x + 9, topY, true, cSlightRight, 8);
+        drawQuadCurve(canvas, x - 5, midY + 10, x - 4, midY - 2, base.x, base.y, cSlightRight, stroke);
         return;
     }
 
     if (hasSlightLeft && hasSlightRight) {
         canvas.line(x, baseY, x, midY + 10, baseCol, stroke);
-        drawQuadCurve(canvas, x, midY + 10, x - 4, midY - 4, x - 13, topY + 4, cSlightLeft, stroke);
-        drawQuadCurve(canvas, x, midY + 10, x + 4, midY - 4, x + 13, topY + 4, cSlightRight, stroke);
-        drawArrowHeadDiag(canvas, x - 13, topY, false, cSlightLeft, 8);
-        drawArrowHeadDiag(canvas, x + 13, topY, true, cSlightRight, 8);
+        const ArrowBase baseL = drawArrow45(canvas, x - 13, topY + 4, false, cSlightLeft);
+        const ArrowBase baseR = drawArrow45(canvas, x + 13, topY + 4, true, cSlightRight);
+        drawQuadCurve(canvas, x, midY + 10, x - 4, midY - 4, baseL.x, baseL.y, cSlightLeft, stroke);
+        drawQuadCurve(canvas, x, midY + 10, x + 4, midY - 4, baseR.x, baseR.y, cSlightRight, stroke);
         return;
     }
 
