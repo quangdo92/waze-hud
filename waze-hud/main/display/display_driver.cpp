@@ -39,7 +39,7 @@ static_assert(layout::PhysicalWidth == kNativeHeight &&
               layout::PhysicalHeight == kNativeWidth,
               "ES3C35P landscape surface must match the rotated native panel");
 #elif CONFIG_WAZE_HUD_DISPLAY_CYD_28
-constexpr gpio_num_t kBacklight = GPIO_NUM_21;
+constexpr gpio_num_t kBacklight = GPIO_NUM_27;
 constexpr gpio_num_t kCs = GPIO_NUM_15;
 constexpr gpio_num_t kDc = GPIO_NUM_2;
 constexpr gpio_num_t kClock = GPIO_NUM_14;
