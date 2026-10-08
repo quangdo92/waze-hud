@@ -43,7 +43,11 @@ cJSON *envelope(const char *type) {
 void sendJson(cJSON *root, HlpSendLine send, void *context) {
     if (!root || !send) { if (root) cJSON_Delete(root); return; }
     char *line = cJSON_PrintUnformatted(root);
-    if (line) { send(line, context); std::free(line); }
+    if (line) {
+        send(line, context);
+        std::free(line);
+        vTaskDelay(pdMS_TO_TICKS(15));
+    }
     cJSON_Delete(root);
 }
 
@@ -96,15 +100,6 @@ cJSON *schemaItem(uint32_t revision, const char *id, const char *kind, const cha
     return item;
 }
 
-bool producerSupportsConfig(const cJSON *root) {
-    const cJSON *caps = cJSON_GetObjectItemCaseSensitive(root, "caps");
-    if (!cJSON_IsArray(caps)) return false;
-    const cJSON *entry = nullptr;
-    cJSON_ArrayForEach(entry, caps) {
-        if (cJSON_IsString(entry) && std::strcmp(entry->valuestring, "device_config") == 0) return true;
-    }
-    return false;
-}
 }  // namespace
 
 DeviceConfig &DeviceConfig::instance() {
@@ -117,7 +112,10 @@ esp_err_t DeviceConfig::init() {
     nvs_handle_t nvs;
     const esp_err_t opened = nvs_open(kNamespace, NVS_READONLY, &nvs);
     if (opened == ESP_ERR_NVS_NOT_FOUND) {
-        ESP_LOGI(kTag, "Using default device configuration");
+        active_.revision = kSchemaRevision;
+        (void)saveSettings(active_);
+        ESP_LOGI(kTag, "Initialized default device configuration with schema revision %lu",
+                 static_cast<unsigned long>(kSchemaRevision));
         return ESP_OK;
     }
     ESP_RETURN_ON_ERROR(opened, kTag, "NVS configuration open failed");
@@ -277,7 +275,7 @@ bool DeviceConfig::handleMessage(const cJSON *root, HlpSendLine send, void *cont
     const cJSON *type = cJSON_GetObjectItemCaseSensitive(root, "t");
     if (!cJSON_IsString(type)) return false;
     if (std::strcmp(type->valuestring, "hi") == 0) {
-        if (producerSupportsConfig(root)) publishSchema(send, context);
+        publishSchema(send, context);
         return false;  // hi must also reach the session decoder.
     }
     if (std::strcmp(type->valuestring, "cfg_set_begin") == 0) {
