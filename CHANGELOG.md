@@ -4,6 +4,27 @@ Dự án WazeHUD tối ưu cho màn hình ESP32-2432S028 (CYD 2.8 inch). Toàn b
 
 ---
 
+## [Build 14 (v2.8.14-b14)] - 2026-10-08
+
+> Bản phát hành B14 nâng cấp toàn diện hệ thống hiển thị mũi tên làn đường chếch 45° (Slight Left / Right) với đường cong uốn lượn mềm mại, căn giữa chuẩn xác, cơ chế render phân lớp Z-Order và khắc phục triệt để lỗi bắt tay giao thức/cài đặt trên ứng dụng điện thoại.
+
+### ⚡ Khắc phục lỗi Giao thức & Cài đặt App (Hotfix Protocol & App Settings - ĐẶT LÊN ĐẦU)
+- **Khắc phục triệt để lỗi App không chỉnh được cài đặt & Làn đường không nhảy:**
+  - **Xóa bỏ vòng lặp vô tận Handshake `dev` ↔ `hi`:** Loại bỏ hoàn toàn khối kiểm tra sai trường trong bản tin `hi`, chấm dứt tình trạng HUD và app liên tục gửi lại khai báo khiến dữ liệu dẫn đường (`lan` và cảnh báo) bị nghẽn và xóa trắng liên tục.
+  - **Làn đường nhảy tức thì:** Khôi phục luồng nhận dữ liệu điều hướng mượt mà, màn hình chuyển sang cụm mũi tên chỉ dẫn làn ngay khi có thông tin từ Waze, không còn bị đơ ở ETA.
+  - **Cài đặt trên App phản hồi tức thì:** Xóa bỏ độ trễ thừa trong lệnh gửi JSON cấu hình và tối ưu hóa hàng đợi BLE giúp app Waze Mod gửi/lưu cài đặt (độ sáng, giao diện Ngày/Đêm, xoay màn hình...) phản hồi ngay lập tức, không còn báo lỗi transaction timeout.
+  - **Đồng bộ trên trọn bộ 5 biến thể firmware** (CYD 2.8" 2-USB BLE, 1-USB BLE, 2-USB Serial, 1-USB Serial và CYD 3.5").
+
+### 🏹 Cải tiến Đồ họa Mũi tên Làn đường (Lane Graphics Redesign)
+- **Thân mũi tên rẽ chếch 45° uốn cong mềm mại (Smooth Curved Arrows):** Thay thế các đường gấp khúc thô cứng bằng đường cong uốn lượn nhẹ tự nhiên (Quad Curve) theo phong cách Waze; thân đi thẳng giữ trục đứng cân đối.
+- **Đầu mũi tên vát Chevron thanh thoát:** Thiết kế cánh mũi tên góc $\pm 48^\circ$ kèm đuôi vát khí động học (Chevron notch), ôm khít đỉnh cung cong.
+- **Căn giữa chuẩn xác:** Làn đơn rẽ chếch trái (`0x02`) và chếch phải (`0x10`) được căn chỉnh đối trọng trục gốc, nằm cân đối tuyệt đối ngay tâm làn.
+- **Tách biệt tổ hợp Rẽ chếch 45° + Vuông góc 90° (`0x30`, `0x06`):** Nhánh 45° vươn lên đỉnh cao nhất, nhánh rẽ 90° tách ra từ bụng dưới, cách nhau 30px, không còn bị chen chúc.
+- **Cơ chế render Two-Pass phân lớp Z-Order:** Vẽ toàn bộ các nhánh không chọn (màu xám) xuống dưới nền trước, sau đó vẽ đè nhánh được chọn (màu trắng) lên trên. Loại bỏ hoàn toàn việc màu xám đè lên hoặc cắn khuyết nhánh màu trắng tại các điểm giao cắt.
+- **Hỗ trợ đầy đủ các tổ hợp làn phức tạp:** Làn Thẳng + Chếch (`0x03`, `0x11`), Chạc đôi chữ Y (`0x12`), Làn 3 hướng (`0x13`, `0x25`).
+
+---
+
 ## [Beta 8 (v2.8.8)] - 2026-10-06
 
 > Bản cập nhật lớn toàn diện tối ưu hóa trải nghiệm lái xe thực tế, nâng cấp cụm tốc độ taplo và chế độ chạy tự do so với bản Beta 7 (v2.8.2 phát hành ngày 05/10/2026).
