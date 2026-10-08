@@ -309,7 +309,7 @@ esp_err_t DisplayDriver::drawRegion(const Rect &region, uint16_t *pixels) {
 
 esp_err_t DisplayDriver::setBrightness(uint8_t percent) {
     percent = percent > 100 ? 100 : percent;
-    const uint32_t duty = (1023U * percent) / 100U;
+    const uint32_t duty = (percent == 100) ? 1024U : ((1023U * percent) / 100U);
     ESP_RETURN_ON_ERROR(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, duty), kTag, "brightness duty failed");
     return ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
 }

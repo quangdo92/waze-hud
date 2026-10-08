@@ -21,6 +21,8 @@ public:
     void triangle(int x0, int y0, int x1, int y1, int x2, int y2, uint16_t color);
     void alphaMask(int x, int y, const assets::AlphaMask &mask, uint16_t color);
     void colorBitmap(int x, int y, const assets::ColorBitmap &bitmap);
+    void colorBitmapScaled(int x, int y, const assets::ColorBitmap &bitmap, int destWidth, int destHeight);
+    void colorBitmapScaled(int x, int y, const assets::ColorBitmap &bitmap, int size);
 
     int textWidth(const char *utf8, int scale, int maxCells = -1) const;
     void text(int x, int y, const char *utf8, uint16_t color, int scale = 1,
@@ -28,6 +30,8 @@ public:
     int fontTextWidth(const char *utf8, const assets::BitmapFont &font) const;
     void fontText(int x, int y, const char *utf8, const assets::BitmapFont &font,
                   uint16_t color, int maxWidth = -1, bool centered = false);
+    void fontTextScaled(int x, int y, const char *utf8, const assets::BitmapFont &font,
+                        uint16_t color, float scale, int maxWidth = -1, bool centered = false);
 
     int width() const { return width_; }
     int height() const { return height_; }

@@ -13,8 +13,8 @@ namespace waze_hud {
 namespace {
 constexpr char kTag[] = "CONFIG";
 constexpr char kNamespace[] = "hud_cfg";
-constexpr int kItemCount = 8;
-constexpr uint32_t kSchemaRevision = 5;
+constexpr int kItemCount = 9;
+constexpr uint32_t kSchemaRevision = 6;
 
 bool validBrightness(int value) {
     return value >= 10 && value <= 100 && ((value - 10) % 5) == 0;
@@ -72,6 +72,7 @@ esp_err_t saveSettings(const DeviceSettings &settings) {
     ESP_RETURN_ON_ERROR(nvs_open(kNamespace, NVS_READWRITE, &nvs), kTag, "NVS open failed");
     esp_err_t result = nvs_set_u8(nvs, "brightness", settings.brightness);
     if (result == ESP_OK) result = nvs_set_u8(nvs, "theme", static_cast<uint8_t>(settings.theme));
+    if (result == ESP_OK) result = nvs_set_u8(nvs, "speed_mode", static_cast<uint8_t>(settings.speedDisplayMode));
     if (result == ESP_OK) result = nvs_set_u8(nvs, "street", settings.showStreet ? 1 : 0);
     if (result == ESP_OK) result = nvs_set_u8(nvs, "mirror", settings.mirrorHud ? 1 : 0);
     if (result == ESP_OK) result = nvs_set_u8(nvs, "rotate", settings.rotateDisplay ? 1 : 0);
@@ -127,6 +128,9 @@ esp_err_t DeviceConfig::init() {
     }
     if (nvs_get_u8(nvs, "theme", &byte) == ESP_OK && byte <= static_cast<uint8_t>(UiTheme::Night))
         active_.theme = static_cast<UiTheme>(byte);
+    if (nvs_get_u8(nvs, "speed_mode", &byte) == ESP_OK &&
+        byte <= static_cast<uint8_t>(SpeedDisplayMode::LimitPrimary))
+        active_.speedDisplayMode = static_cast<SpeedDisplayMode>(byte);
     if (nvs_get_u8(nvs, "street", &byte) == ESP_OK) active_.showStreet = byte != 0;
     if (nvs_get_u8(nvs, "mirror", &byte) == ESP_OK) active_.mirrorHud = byte != 0;
     if (nvs_get_u8(nvs, "rotate", &byte) == ESP_OK) active_.rotateDisplay = byte != 0;
@@ -182,6 +186,25 @@ esp_err_t DeviceConfig::toggleRotation() {
     return ESP_OK;
 }
 
+esp_err_t DeviceConfig::toggleMirror() {
+    DeviceSettings candidate = snapshot();
+    candidate.mirrorHud = !candidate.mirrorHud;
+    ++candidate.revision;
+    const esp_err_t saved = saveSettings(candidate);
+    if (saved != ESP_OK) {
+        ESP_LOGE(kTag, "Button mirror save failed: %s", esp_err_to_name(saved));
+        return saved;
+    }
+    taskENTER_CRITICAL(&lock_);
+    active_ = candidate;
+    taskEXIT_CRITICAL(&lock_);
+    ESP_LOGI(kTag, "HUD mirror changed to %s, revision %lu",
+             candidate.mirrorHud ? "on" : "off",
+             static_cast<unsigned long>(candidate.revision));
+    HudStateStore::instance().refresh();
+    return ESP_OK;
+}
+
 void DeviceConfig::publishSchema(HlpSendLine send, void *context) {
     const DeviceSettings settings = snapshot();
     cJSON *root = envelope("cfg_begin");
@@ -189,6 +212,20 @@ void DeviceConfig::publishSchema(HlpSendLine send, void *context) {
     cJSON_AddNumberToObject(root, "rev", settings.revision);
     cJSON_AddNumberToObject(root, "count", kItemCount);
     cJSON_AddStringToObject(root, "title", "Cau hinh Waze HUD");
+    sendJson(root, send, context);
+
+    root = schemaItem(settings.revision, "speed_display", "selection", "Hien thi toc do");
+    cJSON_AddStringToObject(root, "value",
+        settings.speedDisplayMode == SpeedDisplayMode::LimitPrimary ? "limit_main" : "current_main");
+    cJSON *options = cJSON_AddArrayToObject(root, "options");
+    const char *speedValues[] = {"current_main", "limit_main"};
+    const char *speedLabels[] = {"Toc do hien tai", "Bien gioi han"};
+    for (int i = 0; i < 2; ++i) {
+        cJSON *option = cJSON_CreateObject();
+        cJSON_AddStringToObject(option, "value", speedValues[i]);
+        cJSON_AddStringToObject(option, "label", speedLabels[i]);
+        cJSON_AddItemToArray(options, option);
+    }
     sendJson(root, send, context);
 
     root = schemaItem(settings.revision, "brightness", "slider", "Do sang");
@@ -199,7 +236,7 @@ void DeviceConfig::publishSchema(HlpSendLine send, void *context) {
     root = schemaItem(settings.revision, "theme", "selection", "Giao dien");
     const char *theme = settings.theme == UiTheme::Day ? "day" : settings.theme == UiTheme::Night ? "night" : "auto";
     cJSON_AddStringToObject(root, "value", theme);
-    cJSON *options = cJSON_AddArrayToObject(root, "options");
+    options = cJSON_AddArrayToObject(root, "options");
     const char *values[] = {"auto", "day", "night"};
     const char *labels[] = {"Tu dong", "Ban ngay", "Ban dem"};
     for (int i = 0; i < 3; ++i) {
@@ -291,6 +328,13 @@ bool DeviceConfig::handleMessage(const cJSON *root, HlpSendLine send, void *cont
             bit = 1U << 3; valid = exactInteger(value, -5, 5, integer); if (valid) pending.draft.offsetX = integer;
         } else if (std::strcmp(id->valuestring, "offset_y") == 0) {
             bit = 1U << 4; valid = exactInteger(value, -5, 5, integer); if (valid) pending.draft.offsetY = integer;
+        } else if (std::strcmp(id->valuestring, "speed_display") == 0) {
+            bit = 1U << 8; valid = cJSON_IsString(value);
+            if (valid && std::strcmp(value->valuestring, "current_main") == 0)
+                pending.draft.speedDisplayMode = SpeedDisplayMode::CurrentPrimary;
+            else if (valid && std::strcmp(value->valuestring, "limit_main") == 0)
+                pending.draft.speedDisplayMode = SpeedDisplayMode::LimitPrimary;
+            else valid = false;
         } else valid = false;
         if ((pending.mask & bit) != 0) valid = false;
         if (!valid) {
