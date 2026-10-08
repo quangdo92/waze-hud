@@ -337,6 +337,10 @@ void drawGuidanceLane(Canvas &canvas, int x, int spacing, const LaneState &lane,
         canvas.fillCircle(rx, topY + 4 + 3, stroke / 2, cLeft);
         canvas.fillCircle(rx - 3, topY + 4, stroke / 2, cLeft);
         drawArrowHeadDir(canvas, leftBound, topY + 4, 2, cLeft, arrowSize);
+        if (hasSlightLeft) {
+            drawQuadCurve(canvas, rx, midY + 12, rx - 2, midY - 2, x - 2, topY + 11, cSlightLeft, stroke);
+            drawArrowHeadDiag(canvas, x - 2, topY + 7, false, cSlightLeft, 7);
+        }
         return;
     }
 
@@ -349,6 +353,10 @@ void drawGuidanceLane(Canvas &canvas, int x, int spacing, const LaneState &lane,
         canvas.fillCircle(lx, topY + 4 + 3, stroke / 2, cRight);
         canvas.fillCircle(lx + 3, topY + 4, stroke / 2, cRight);
         drawArrowHeadDir(canvas, rightBound, topY + 4, 3, cRight, arrowSize);
+        if (hasSlightRight) {
+            drawQuadCurve(canvas, lx, midY + 12, lx + 2, midY - 2, x + 2, topY + 11, cSlightRight, stroke);
+            drawArrowHeadDiag(canvas, x + 2, topY + 7, true, cSlightRight, 7);
+        }
         return;
     }
 
@@ -365,8 +373,8 @@ void drawGuidanceLane(Canvas &canvas, int x, int spacing, const LaneState &lane,
             canvas.fillCircle(x - 3, midY, stroke / 2, cLeft);
             drawArrowHeadDir(canvas, leftBound, midY, 2, cLeft, arrowSize);
         } else if (hasSlightLeft) {
-            drawQuadCurve(canvas, x, midY + 12, x, midY - 2, x - 13, topY + 6, cSlightLeft, stroke);
-            drawArrowHeadDiag(canvas, x - 13, topY + 2, false, cSlightLeft, 7);
+            drawQuadCurve(canvas, x, midY + 12, x - 2, midY - 2, x - 13, topY + 11, cSlightLeft, stroke);
+            drawArrowHeadDiag(canvas, x - 13, topY + 7, false, cSlightLeft, 7);
         }
 
         if (hasRight) {
@@ -377,30 +385,30 @@ void drawGuidanceLane(Canvas &canvas, int x, int spacing, const LaneState &lane,
             canvas.fillCircle(x + 3, midY, stroke / 2, cRight);
             drawArrowHeadDir(canvas, rightBound, midY, 3, cRight, arrowSize);
         } else if (hasSlightRight) {
-            drawQuadCurve(canvas, x, midY + 12, x, midY - 2, x + 13, topY + 6, cSlightRight, stroke);
-            drawArrowHeadDiag(canvas, x + 13, topY + 2, true, cSlightRight, 7);
+            drawQuadCurve(canvas, x, midY + 12, x + 2, midY - 2, x + 13, topY + 11, cSlightRight, stroke);
+            drawArrowHeadDiag(canvas, x + 13, topY + 7, true, cSlightRight, 7);
         }
         return;
     }
 
     if (hasSlightLeft && !hasSlightRight && !hasRight) {
-        canvas.line(x, baseY, x, midY + 10, cSlightLeft, stroke);
-        drawQuadCurve(canvas, x, midY + 10, x, midY - 4, x - 13, topY + 4, cSlightLeft, stroke);
-        drawArrowHeadDiag(canvas, x - 13, topY, false, cSlightLeft, 8);
+        canvas.line(x + 5, baseY, x + 5, midY + 10, cSlightLeft, stroke);
+        drawQuadCurve(canvas, x + 5, midY + 10, x + 4, midY - 4, x - 9, topY + 4, cSlightLeft, stroke);
+        drawArrowHeadDiag(canvas, x - 9, topY, false, cSlightLeft, 8);
         return;
     }
 
     if (hasSlightRight && !hasSlightLeft && !hasLeft) {
-        canvas.line(x, baseY, x, midY + 10, cSlightRight, stroke);
-        drawQuadCurve(canvas, x, midY + 10, x, midY - 4, x + 13, topY + 4, cSlightRight, stroke);
-        drawArrowHeadDiag(canvas, x + 13, topY, true, cSlightRight, 8);
+        canvas.line(x - 5, baseY, x - 5, midY + 10, cSlightRight, stroke);
+        drawQuadCurve(canvas, x - 5, midY + 10, x - 4, midY - 4, x + 9, topY + 4, cSlightRight, stroke);
+        drawArrowHeadDiag(canvas, x + 9, topY, true, cSlightRight, 8);
         return;
     }
 
     if (hasSlightLeft && hasSlightRight) {
         canvas.line(x, baseY, x, midY + 10, baseCol, stroke);
-        drawQuadCurve(canvas, x, midY + 10, x, midY - 4, x - 13, topY + 4, cSlightLeft, stroke);
-        drawQuadCurve(canvas, x, midY + 10, x, midY - 4, x + 13, topY + 4, cSlightRight, stroke);
+        drawQuadCurve(canvas, x, midY + 10, x - 4, midY - 4, x - 13, topY + 4, cSlightLeft, stroke);
+        drawQuadCurve(canvas, x, midY + 10, x + 4, midY - 4, x + 13, topY + 4, cSlightRight, stroke);
         drawArrowHeadDiag(canvas, x - 13, topY, false, cSlightLeft, 8);
         drawArrowHeadDiag(canvas, x + 13, topY, true, cSlightRight, 8);
         return;
@@ -1588,10 +1596,6 @@ void HudRenderer::renderGuidance(Canvas &canvas, const HudState &state,
                     std::snprintf(trafficDetail, sizeof(trafficDetail), "+%d PH (%s)",
                                   alert.trafficDelayMinutes, trafficSeverityLabel(alert.trafficSeverity));
                     canvas.fontText(190, 44, trafficDetail, assets::kTextSmall, trafficSeverityColor(alert.trafficSeverity), 110, false);
-                } else if (alert.valueKmh > 0) {
-                    char valBuf[32];
-                    std::snprintf(valBuf, sizeof(valBuf), "G/H: %d km/h", alert.valueKmh);
-                    canvas.fontText(190, 44, valBuf, assets::kTextSmall, colors::Amber, 110, false);
                 }
             } else if (alertCount == 2) {
                 constexpr int cardW = 146;
