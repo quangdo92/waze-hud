@@ -201,7 +201,7 @@ esp_err_t BleTransport::sendLine(const char *line) {
         }
         // Notifications are unacknowledged. Small pacing prevents the host and
         // controller mbuf pools from being exhausted when MTU is still 23.
-        vTaskDelay(pdMS_TO_TICKS(6));
+        vTaskDelay(pdMS_TO_TICKS(3));
     }
     return ESP_OK;
 }

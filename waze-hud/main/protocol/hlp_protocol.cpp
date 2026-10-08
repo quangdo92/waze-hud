@@ -138,22 +138,6 @@ void HlpProtocol::handleFrame(const char *line, size_t length) {
                  cJSON_IsNumber(rate) ? rate->valueint : -1);
         changed = decoder_.handleHi(root, state);
         (void)DeviceConfig::instance().handleMessage(root, sendEntry, nullptr);
-
-        const cJSON *fields = cJSON_GetObjectItemCaseSensitive(root, "fields");
-        bool hasLanField = false;
-        if (cJSON_IsArray(fields)) {
-            const cJSON *f = nullptr;
-            cJSON_ArrayForEach(f, fields) {
-                if (cJSON_IsString(f) && std::strcmp(f->valuestring, "lan") == 0) {
-                    hasLanField = true;
-                    break;
-                }
-            }
-        }
-        if (!hasLanField) {
-            ESP_LOGW(kTag, "Peer hi missing 'lan' opt-in; re-sending device declaration");
-            sendDeviceDeclaration();
-        }
     } else if (std::strcmp(type->valuestring, "s") == 0) {
         changed = decoder_.decodeState(root, state);
         if (changed && (++stateUpdates_ % 100U) == 0)
@@ -176,13 +160,13 @@ void HlpProtocol::sendDeviceDeclaration() {
     // that procedure a brief chance to complete so the declaration is sent in
     // two large notifications instead of a burst of 20-byte fragments. This
     // remains well inside HLP's 500 ms declaration window.
-    vTaskDelay(pdMS_TO_TICKS(200));
+    vTaskDelay(pdMS_TO_TICKS(150));
     char declaration[HLP_MAX_FRAME]{};
     const int declarationLength = std::snprintf(declaration, sizeof(declaration),
         "{\"v\":1,\"t\":\"dev\",\"name\":\"%s\",\"fw\":\""
         WAZE_HUD_FIRMWARE_VERSION "\","
         "\"proto\":[1],\"disp\":{\"w\":%d,\"h\":%d,\"color\":1},"
-        "\"can\":[\"speed\",\"limit\",\"turn\",\"lanes\",\"street\",\"eta\",\"avgzone\",\"alerts\",\"device_config\"],"
+        "\"can\":[\"speed\",\"limit\",\"turn\",\"lanes\",\"street\",\"eta\",\"avgzone\",\"alerts\"],"
         "\"want\":{\"rate\":4,\"fields\":[\"nav\",\"spd\",\"lim\",\"over\",\"trn\",\"trn2\","
         "\"dst\",\"exit\",\"lan\",\"st\",\"st2\",\"eta\",\"rmin\",\"rm\",\"rkm\",\"avg\",\"avgL\",\"avgR\","
         "\"avgP\",\"alr\",\"alrD\",\"alrV\",\"alrS\",\"alrM\",\"alrs\"]},\"transport\":\"ble\"}",

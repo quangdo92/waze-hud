@@ -43,11 +43,7 @@ cJSON *envelope(const char *type) {
 void sendJson(cJSON *root, HlpSendLine send, void *context) {
     if (!root || !send) { if (root) cJSON_Delete(root); return; }
     char *line = cJSON_PrintUnformatted(root);
-    if (line) {
-        send(line, context);
-        std::free(line);
-        vTaskDelay(pdMS_TO_TICKS(15));
-    }
+    if (line) { send(line, context); std::free(line); }
     cJSON_Delete(root);
 }
 
@@ -98,6 +94,16 @@ cJSON *schemaItem(uint32_t revision, const char *id, const char *kind, const cha
     cJSON_AddStringToObject(item, "kind", kind);
     cJSON_AddStringToObject(item, "label", label);
     return item;
+}
+
+bool producerSupportsConfig(const cJSON *root) {
+    const cJSON *caps = cJSON_GetObjectItemCaseSensitive(root, "caps");
+    if (!cJSON_IsArray(caps)) return false;
+    const cJSON *entry = nullptr;
+    cJSON_ArrayForEach(entry, caps) {
+        if (cJSON_IsString(entry) && std::strcmp(entry->valuestring, "device_config") == 0) return true;
+    }
+    return false;
 }
 
 }  // namespace
@@ -275,7 +281,7 @@ bool DeviceConfig::handleMessage(const cJSON *root, HlpSendLine send, void *cont
     const cJSON *type = cJSON_GetObjectItemCaseSensitive(root, "t");
     if (!cJSON_IsString(type)) return false;
     if (std::strcmp(type->valuestring, "hi") == 0) {
-        publishSchema(send, context);
+        if (producerSupportsConfig(root)) publishSchema(send, context);
         return false;  // hi must also reach the session decoder.
     }
     if (std::strcmp(type->valuestring, "cfg_set_begin") == 0) {
