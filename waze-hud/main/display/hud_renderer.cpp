@@ -354,6 +354,16 @@ void drawGuidanceLane(Canvas &canvas, int x, int spacing, const LaneState &lane,
     }
 
     if (hasLeft && !hasStraight && !hasRight) {
+        if (hasSlightLeft) {
+            const int sx = x + 4;
+            const int lBase = leftBound + arrowSize;
+            canvas.line(sx, baseY, sx, midY + 8, cLeft, stroke);
+            canvas.line(sx, midY + 8, lBase, midY + 8, cLeft, stroke);
+            drawArrowHeadDir(canvas, leftBound, midY + 8, 2, cLeft, arrowSize);
+            const ArrowBase base = drawArrow45(canvas, x - 8, topY + 2, false, cSlightLeft);
+            drawQuadCurve(canvas, sx, midY + 8, sx, midY - 6, base.x, base.y, cSlightLeft, stroke);
+            return;
+        }
         const int rx = x + 8;
         const int lBase = leftBound + arrowSize;
         canvas.line(rx, baseY, rx, topY + 4 + 3, cLeft, stroke);
@@ -362,14 +372,20 @@ void drawGuidanceLane(Canvas &canvas, int x, int spacing, const LaneState &lane,
         canvas.fillCircle(rx, topY + 4 + 3, stroke / 2, cLeft);
         canvas.fillCircle(rx - 3, topY + 4, stroke / 2, cLeft);
         drawArrowHeadDir(canvas, leftBound, topY + 4, 2, cLeft, arrowSize);
-        if (hasSlightLeft) {
-            const ArrowBase base = drawArrow45(canvas, x - 2, topY + 7, false, cSlightLeft);
-            drawQuadCurve(canvas, rx, midY + 12, rx - 2, midY - 2, base.x, base.y, cSlightLeft, stroke);
-        }
         return;
     }
 
     if (hasRight && !hasStraight && !hasLeft) {
+        if (hasSlightRight) {
+            const int sx = x - 4;
+            const int rBase = rightBound - arrowSize;
+            canvas.line(sx, baseY, sx, midY + 8, cRight, stroke);
+            canvas.line(sx, midY + 8, rBase, midY + 8, cRight, stroke);
+            drawArrowHeadDir(canvas, rightBound, midY + 8, 3, cRight, arrowSize);
+            const ArrowBase base = drawArrow45(canvas, x + 8, topY + 2, true, cSlightRight);
+            drawQuadCurve(canvas, sx, midY + 8, sx, midY - 6, base.x, base.y, cSlightRight, stroke);
+            return;
+        }
         const int lx = x - 8;
         const int rBase = rightBound - arrowSize;
         canvas.line(lx, baseY, lx, topY + 4 + 3, cRight, stroke);
@@ -378,10 +394,6 @@ void drawGuidanceLane(Canvas &canvas, int x, int spacing, const LaneState &lane,
         canvas.fillCircle(lx, topY + 4 + 3, stroke / 2, cRight);
         canvas.fillCircle(lx + 3, topY + 4, stroke / 2, cRight);
         drawArrowHeadDir(canvas, rightBound, topY + 4, 3, cRight, arrowSize);
-        if (hasSlightRight) {
-            const ArrowBase base = drawArrow45(canvas, x + 2, topY + 7, true, cSlightRight);
-            drawQuadCurve(canvas, lx, midY + 12, lx + 2, midY - 2, base.x, base.y, cSlightRight, stroke);
-        }
         return;
     }
 
