@@ -2,15 +2,20 @@
 
 #include "serial/serial_transport.h"
 #include "config/device_config.h"
+#include "display/layout.h"
 #include "cJSON.h"
 #include "esp_check.h"
 #include "esp_log.h"
 #include "freertos/task.h"
 #include "state/hud_state_store.h"
+#include <cstdio>
 #include <cstring>
 
 namespace waze_hud {
 namespace {
+#ifndef WAZE_HUD_FIRMWARE_VERSION
+#define WAZE_HUD_FIRMWARE_VERSION "development"
+#endif
 constexpr char kTag[] = "HLP";
 constexpr TickType_t kStaleTimeout = pdMS_TO_TICKS(3000);
 constexpr TickType_t kSessionTimeout = pdMS_TO_TICKS(10000);
@@ -44,6 +49,8 @@ void HlpProtocol::sendEntry(const char *line, void *) {
 }
 
 void HlpProtocol::run() {
+    vTaskDelay(pdMS_TO_TICKS(200));
+    sendDeviceDeclaration();
     SerialEvent event;
     for (;;) {
         if (SerialTransport::instance().receive(event, pdMS_TO_TICKS(100))) {
@@ -51,6 +58,7 @@ void HlpProtocol::run() {
                 decoder_.resetSession();
                 hlp_receiver_init(&receiver_, frameEntry, this);
                 sessionEstablished_ = false;
+                currentSessionId_ = 0;
                 lastPeerActivity_ = 0;
                 HudStateStore::instance().publish(HudState{});
             } else {
@@ -79,6 +87,7 @@ void HlpProtocol::run() {
             decoder_.resetSession();
             hlp_receiver_init(&receiver_, frameEntry, this);
             sessionEstablished_ = false;
+            currentSessionId_ = 0;
             lastPeerActivity_ = 0;
             HudStateStore::instance().publish(HudState{});
         }
@@ -126,10 +135,19 @@ void HlpProtocol::handleFrame(const char *line, size_t length) {
         const cJSON *app = cJSON_GetObjectItemCaseSensitive(root, "app");
         const cJSON *appVersion = cJSON_GetObjectItemCaseSensitive(root, "appv");
         const cJSON *rate = cJSON_GetObjectItemCaseSensitive(root, "rate");
-        ESP_LOGI(kTag, "Received hi: app=%s appv=%s rate=%d",
+        const cJSON *sessItem = cJSON_GetObjectItemCaseSensitive(root, "sess");
+        const uint32_t session = sessItem && cJSON_IsNumber(sessItem)
+            ? static_cast<uint32_t>(sessItem->valuedouble) : 0;
+        ESP_LOGI(kTag, "Received hi: app=%s appv=%s rate=%d sess=%lu",
                  cJSON_IsString(app) ? app->valuestring : "(missing)",
                  cJSON_IsString(appVersion) ? appVersion->valuestring : "(missing)",
-                 cJSON_IsNumber(rate) ? rate->valueint : -1);
+                 cJSON_IsNumber(rate) ? rate->valueint : -1,
+                 static_cast<unsigned long>(session));
+        const bool newSession = !sessionEstablished_ || (session != 0 && session != currentSessionId_);
+        if (newSession) {
+            currentSessionId_ = session;
+            sendDeviceDeclaration();
+        }
         changed = decoder_.handleHi(root, state);
         state.connected = true;
         state.signalStale = false;
@@ -151,6 +169,25 @@ void HlpProtocol::handleFrame(const char *line, size_t length) {
     }
     if (changed) HudStateStore::instance().publish(state);
     cJSON_Delete(root);
+}
+
+void HlpProtocol::sendDeviceDeclaration() {
+    char declaration[HLP_MAX_FRAME]{};
+    const int declarationLength = std::snprintf(declaration, sizeof(declaration),
+        "{\"v\":1,\"t\":\"dev\",\"name\":\"%s\",\"fw\":\""
+        WAZE_HUD_FIRMWARE_VERSION "\","
+        "\"proto\":[1],\"disp\":{\"w\":%d,\"h\":%d,\"color\":1},"
+        "\"can\":[\"speed\",\"limit\",\"turn\",\"lanes\",\"street\",\"eta\",\"avgzone\",\"alerts\"],"
+        "\"want\":{\"rate\":4,\"fields\":[\"nav\",\"spd\",\"lim\",\"over\",\"trn\",\"trn2\","
+        "\"dst\",\"exit\",\"lan\",\"st\",\"st2\",\"eta\",\"rmin\",\"rm\",\"rkm\",\"avg\",\"avgL\",\"avgR\","
+        "\"avgP\",\"alr\",\"alrD\",\"alrV\",\"alrS\",\"alrM\",\"alrs\"]},\"transport\":\"serial\"}",
+        layout::DeviceName, layout::PhysicalWidth, layout::PhysicalHeight);
+    if (declarationLength <= 0 || declarationLength >= static_cast<int>(sizeof(declaration))) {
+        ESP_LOGE(kTag, "HLP dev declaration overflow");
+        return;
+    }
+    sendEntry(declaration, nullptr);
+    ESP_LOGI(kTag, "Sent HLP dev declaration requesting 4 Hz with lanes and alrs");
 }
 
 }  // namespace waze_hud

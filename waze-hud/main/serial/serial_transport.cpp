@@ -16,7 +16,7 @@ constexpr int kTxPin = 1;
 constexpr int kRxPin = 3;
 constexpr int kBaudRate = CONFIG_WAZE_HUD_SERIAL_BAUD;
 constexpr int kRxBufferSize = 2048;
-constexpr int kTxBufferSize = 1024;
+constexpr int kTxBufferSize = 2048;
 QueueHandle_t uartEvents = nullptr;
 }
 
