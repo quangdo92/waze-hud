@@ -1001,9 +1001,9 @@ void HudRenderer::render(const HudState &state, const DeviceSettings &settings,
         }
         nextStreetMarqueeActive_ = true;
         nextStreetMarqueeTextWidth_ = nextStreetWidth;
-        constexpr uint64_t kNsStartHoldMs = 1500;
-        constexpr uint64_t kNsEndHoldMs = 900;
-        constexpr uint64_t kNsMsPerPixel = 45;
+        constexpr uint64_t kNsStartHoldMs = 1000;
+        constexpr uint64_t kNsEndHoldMs = 500;
+        constexpr uint64_t kNsMsPerPixel = 28;
         const int overflow = nextStreetWidth - availableNextStreetWidth + 6;
         const uint64_t scrollMs = static_cast<uint64_t>(overflow) * kNsMsPerPixel;
         const uint64_t cycleMs = kNsStartHoldMs + scrollMs + kNsEndHoldMs;
