@@ -67,7 +67,8 @@ bool guidanceChanged(const HudState &a, const HudState &b) {
 }
 
 bool hasSettingsChanged(const DeviceSettings &a, const DeviceSettings &b) {
-    return a.brightness != b.brightness || a.theme != b.theme || a.showStreet != b.showStreet ||
+    return a.fixedBrightness != b.fixedBrightness || a.brightness != b.brightness ||
+           a.theme != b.theme || a.invertColor != b.invertColor ||
            a.mirrorHud != b.mirrorHud || a.rotateDisplay != b.rotateDisplay ||
            a.overspeedOffsetKmh != b.overspeedOffsetKmh ||
            a.offsetX != b.offsetX || a.offsetY != b.offsetY || a.revision != b.revision;
@@ -81,7 +82,11 @@ bool firmwareOverspeed(const HudState &state, const DeviceSettings &settings) {
 }
 
 uint16_t alertDistanceColor(int distanceM, uint16_t normalColor) {
-    return distanceM >= 0 && distanceM < 500 ? colors::Cyan : normalColor;
+    if (distanceM < 0) return normalColor;
+    if (distanceM < 100) return colors::Red;
+    if (distanceM <= 300) return colors::Amber;
+    if (distanceM <= 600) return colors::White;
+    return colors::Green;
 }
 
 #if __has_include("serial/serial_transport.h")
@@ -112,22 +117,22 @@ uint8_t calculateTimeOfDayBrightness(int normalizedMinute, uint8_t maxBrightness
     constexpr int kSunsetStartMinute = 17 * 60 + 30; // 17:30 (1050)
     constexpr int kNightStartMinute = 19 * 60;        // 19:00 (1140)
     constexpr int kSunriseStartMinute = 5 * 60;       // 05:00 (300)
-    constexpr uint8_t kNightBrightness = 30;
+    constexpr uint8_t kNightBrightness = 20;
 
     if (maxBrightness < kNightBrightness) maxBrightness = 100;
 
     if (normalizedMinute >= kDayStartMinute && normalizedMinute < kSunsetStartMinute) {
         return maxBrightness;
     } else if (normalizedMinute >= kSunsetStartMinute && normalizedMinute < kNightStartMinute) {
-        // Sunset transition: 17:30 -> 19:00 (Max -> 30%)
+        // Sunset transition: 17:30 -> 19:00 (Max -> 20%)
         const float progress = static_cast<float>(normalizedMinute - kSunsetStartMinute) /
                                static_cast<float>(kNightStartMinute - kSunsetStartMinute);
         return static_cast<uint8_t>(maxBrightness - progress * (maxBrightness - kNightBrightness) + 0.5f);
     } else if (normalizedMinute >= kNightStartMinute || normalizedMinute < kSunriseStartMinute) {
-        // Night: 19:00 -> 05:00 (30%)
+        // Night: 19:00 -> 05:00 (20%)
         return kNightBrightness;
     } else {
-        // Sunrise transition: 05:00 -> 06:00 (30% -> Max)
+        // Sunrise transition: 05:00 -> 06:00 (20% -> Max)
         const float progress = static_cast<float>(normalizedMinute - kSunriseStartMinute) /
                                static_cast<float>(kDayStartMinute - kSunriseStartMinute);
         return static_cast<uint8_t>(kNightBrightness + progress * (maxBrightness - kNightBrightness) + 0.5f);
@@ -915,6 +920,10 @@ esp_err_t HudRenderer::init() {
     buffer_ = static_cast<uint16_t *>(heap_caps_malloc(layout::MaxRegionPixels * sizeof(uint16_t),
                                                        MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
     if (!buffer_) {
+        buffer_ = static_cast<uint16_t *>(heap_caps_malloc(layout::MaxRegionPixels * sizeof(uint16_t),
+                                                           MALLOC_CAP_DMA));
+    }
+    if (!buffer_) {
         ESP_LOGE(kTag, "Unable to allocate %d-byte dirty-region buffer",
                  layout::MaxRegionPixels * static_cast<int>(sizeof(uint16_t)));
         return ESP_ERR_NO_MEM;
@@ -942,9 +951,8 @@ void HudRenderer::render(const HudState &state, const DeviceSettings &settings,
     } else {
         std::snprintf(streetDisplayBuf, sizeof(streetDisplayBuf), "%s", displayStreet(state));
     }
-    const int streetWidth = settings.showStreet
-        ? metrics.fontTextWidth(streetDisplayBuf, assets::kTextMedium) : 0;
-    const bool shouldMarquee = state.connected && state.hasProducerState && settings.showStreet &&
+    const int streetWidth = metrics.fontTextWidth(streetDisplayBuf, assets::kTextMedium);
+    const bool shouldMarquee = state.connected && state.hasProducerState &&
                                streetWidth > availableStreetWidth;
     const uint64_t nowMs = static_cast<uint64_t>(esp_timer_get_time() / 1000);
     if (!shouldMarquee) {
@@ -973,9 +981,9 @@ void HudRenderer::render(const HudState &state, const DeviceSettings &settings,
         else marqueeOffset_ = overflow;
     }
     const bool marqueeFrameChanged = marqueeActive_ && marqueeOffset_ != marqueeRenderedOffset_;
-#if CONFIG_WAZE_HUD_DISPLAY_CYD_28
+#if CONFIG_WAZE_HUD_DISPLAY_CYD_28 || CONFIG_WAZE_HUD_DISPLAY_35_480X320
     const bool nextStreetChanged = firstFrame_ || !sameText(state.nextStreet, previous_.nextStreet);
-    constexpr int availableNextStreetWidth = 75;
+    constexpr int availableNextStreetWidth = 105;
     const int nextStreetWidth = state.nextStreet[0] != 0
         ? metrics.fontTextWidth(state.nextStreet.data(), assets::kTextMedium) : 0;
     const bool shouldNextStreetMarquee = state.connected && state.hasProducerState &&
@@ -1006,7 +1014,7 @@ void HudRenderer::render(const HudState &state, const DeviceSettings &settings,
         else nextStreetMarqueeOffset_ = overflow;
     }
     const bool nextStreetMarqueeFrameChanged = nextStreetMarqueeActive_ &&
-                                               nextStreetMarqueeOffset_ != nextStreetMarqueeRenderedOffset_;
+                                                nextStreetMarqueeOffset_ != nextStreetMarqueeRenderedOffset_;
 #else
     constexpr bool nextStreetMarqueeFrameChanged = false;
 #endif
@@ -1024,12 +1032,14 @@ void HudRenderer::render(const HudState &state, const DeviceSettings &settings,
                                state.navigationActive != previous_.navigationActive;
     const bool configChanged = firstFrame_ || hasSettingsChanged(settings, previousSettings_);
     uint8_t targetBrightness = settings.brightness;
-    if (settings.theme == UiTheme::Night) {
-        targetBrightness = std::min(settings.brightness, static_cast<uint8_t>(30));
+    if (settings.fixedBrightness) {
+        targetBrightness = settings.brightness;
+    } else if (settings.theme == UiTheme::Night) {
+        targetBrightness = std::min(settings.brightness, static_cast<uint8_t>(20));
     } else if (settings.theme == UiTheme::Auto) {
         if (currentClockMinute != INT64_MIN) {
             const int normalizedMinute = static_cast<int>((currentClockMinute % 1440 + 1440) % 1440);
-            targetBrightness = calculateTimeOfDayBrightness(normalizedMinute, settings.brightness > 30 ? settings.brightness : 100);
+            targetBrightness = calculateTimeOfDayBrightness(normalizedMinute, 100);
         }
     }
 
@@ -1039,6 +1049,14 @@ void HudRenderer::render(const HudState &state, const DeviceSettings &settings,
             ESP_LOGE(kTag, "Brightness update failed: %s", esp_err_to_name(brightnessResult));
         else
             currentAppliedBrightness_ = targetBrightness;
+    }
+
+    if (firstFrame_ || settings.invertColor != currentAppliedInvert_) {
+        const esp_err_t invertResult = DisplayDriver::instance().setInvertColor(settings.invertColor);
+        if (invertResult != ESP_OK)
+            ESP_LOGE(kTag, "Color inversion update failed: %s", esp_err_to_name(invertResult));
+        else
+            currentAppliedInvert_ = settings.invertColor;
     }
 
     if (configChanged) {
@@ -1095,7 +1113,6 @@ void HudRenderer::render(const HudState &state, const DeviceSettings &settings,
         if (guidanceChanged(state, previous_))
             renderRegion(layout::Guidance, state, settings, systemStatus);
         if (streetChanged || laneStateSwapped ||
-            settings.showStreet != previousSettings_.showStreet ||
             marqueeFrameChanged) {
             renderRegion(layout::Street, state, settings, systemStatus);
             streetRendered = true;
@@ -1361,7 +1378,7 @@ void HudRenderer::renderStatus(Canvas &canvas, const Rect &region, const HudStat
 void HudRenderer::renderManeuver(Canvas &canvas, const HudState &state, const DeviceSettings &settings) {
     canvas.clear(colors::Panel);
     const uint16_t fg = colors::White;
-#if CONFIG_WAZE_HUD_DISPLAY_CYD_28
+#if CONFIG_WAZE_HUD_DISPLAY_CYD_28 || CONFIG_WAZE_HUD_DISPLAY_35_480X320
     if (!state.navigationActive || state.maneuver == Maneuver::None) {
         canvas.fontText(4, 16, "CHẠY", assets::kTextSmall, colors::Muted, 77, true);
         canvas.fontText(4, 34, "TỰ DO", assets::kTextMedium, colors::Green, 77, true);
@@ -1372,12 +1389,13 @@ void HudRenderer::renderManeuver(Canvas &canvas, const HudState &state, const De
         return;
     }
     if (state.nextStreet[0] != 0) {
+        constexpr int availableNextStreetWidth = 105;
         if (nextStreetMarqueeActive_) {
             canvas.fontText(5 - nextStreetMarqueeOffset_, 2, state.nextStreet.data(),
                             assets::kTextMedium, colors::White, -1, false);
         } else {
             canvas.fontText(5, 2, state.nextStreet.data(),
-                            assets::kTextMedium, colors::White, 75, true);
+                            assets::kTextMedium, colors::White, availableNextStreetWidth, false);
         }
     }
     drawManeuverIcon(canvas, state.maneuver, state.roundaboutExit, fg);
@@ -1415,6 +1433,19 @@ void HudRenderer::renderSpeedCluster(Canvas &canvas, const HudState &state,
     constexpr int badgeH = 32;
 #endif
 
+    // Draw continuing nextStreet text underneath the speed sign
+    if (state.navigationActive && state.maneuver != Maneuver::None && state.nextStreet[0] != 0) {
+        constexpr int offsetXInCluster = 5 - layout::Maneuver.width; // 5 - 85 = -80
+        if (nextStreetMarqueeActive_) {
+            canvas.fontText(offsetXInCluster - nextStreetMarqueeOffset_, 2, state.nextStreet.data(),
+                            assets::kTextMedium, colors::White, -1, false);
+        } else {
+            canvas.fontText(offsetXInCluster, 2, state.nextStreet.data(),
+                            assets::kTextMedium, colors::White, 105 + layout::Maneuver.width, false);
+        }
+        canvas.fillRect(0, 0, signX, 2 + assets::kTextMedium.lineHeight, colors::Panel);
+    }
+
     // Kiểm tra chế độ ban đêm: Tuân theo Giao diện (Theme) từ cấu hình hoặc giờ tự động
     bool isNight = false;
     if (settings.theme == UiTheme::Night) {
@@ -1434,6 +1465,7 @@ void HudRenderer::renderSpeedCluster(Canvas &canvas, const HudState &state,
     const uint16_t signBgColor = isNight ? colors::Panel : colors::White;
     const uint16_t signTextColor = isNight ? colors::White : colors::Black;
 
+    canvas.fillCircle(signX, signY, outerRadius + 2, colors::Panel);
     canvas.fillCircle(signX, signY, outerRadius, colors::Red);
     canvas.fillCircle(signX, signY, innerRadius, signBgColor);
 
@@ -1743,32 +1775,30 @@ void HudRenderer::renderGuidance(Canvas &canvas, const HudState &state,
 void HudRenderer::renderStreet(Canvas &canvas, const HudState &state, const DeviceSettings &settings) {
     canvas.clear(colors::Panel);
     const int textY = std::max(0, (layout::StreetHeight - assets::kTextMedium.lineHeight) / 2);
-    if (settings.showStreet) {
-        char streetBuf[180]{};
-        if (state.navigationActive) {
-            std::snprintf(streetBuf, sizeof(streetBuf), "HT: %s", displayStreet(state));
-        } else {
-            std::snprintf(streetBuf, sizeof(streetBuf), "%s", displayStreet(state));
-        }
+    char streetBuf[180]{};
+    if (state.navigationActive) {
+        std::snprintf(streetBuf, sizeof(streetBuf), "HT: %s", displayStreet(state));
+    } else {
+        std::snprintf(streetBuf, sizeof(streetBuf), "%s", displayStreet(state));
+    }
 
-        if (state.laneCount > 0 && state.eta[0] != 0) {
-            char etaBuf[16];
-            std::snprintf(etaBuf, sizeof(etaBuf), "ETA %s", state.eta.data());
-            const int etaW = canvas.fontTextWidth(etaBuf, assets::kTextSmall) + 6;
-            canvas.fontText(8, textY, streetBuf, assets::kTextSmall, colors::White, layout::Width - etaW - 16, false);
-            canvas.fontText(layout::Width - etaW - 4, textY, etaBuf, assets::kTextSmall, colors::Cyan, etaW, false);
+    if (state.laneCount > 0 && state.eta[0] != 0) {
+        char etaBuf[16];
+        std::snprintf(etaBuf, sizeof(etaBuf), "ETA %s", state.eta.data());
+        const int etaW = canvas.fontTextWidth(etaBuf, assets::kTextSmall) + 6;
+        canvas.fontText(8, textY, streetBuf, assets::kTextSmall, colors::White, layout::Width - etaW - 16, false);
+        canvas.fontText(layout::Width - etaW - 4, textY, etaBuf, assets::kTextSmall, colors::Cyan, etaW, false);
+    } else {
+        if (marqueeActive_) {
+            canvas.fontText(8 - marqueeOffset_, textY, streetBuf, assets::kTextMedium,
+                            colors::White, -1, false);
         } else {
-            if (marqueeActive_) {
-                canvas.fontText(8 - marqueeOffset_, textY, streetBuf, assets::kTextMedium,
-                                colors::White, -1, false);
+            if (state.navigationActive) {
+                canvas.fontText(8, textY, streetBuf, assets::kTextMedium, colors::White,
+                                304, false);
             } else {
-                if (state.navigationActive) {
-                    canvas.fontText(8, textY, streetBuf, assets::kTextMedium, colors::White,
-                                    304, false);
-                } else {
-                    canvas.fontText(5, textY, streetBuf, assets::kTextMedium, colors::White,
-                                    310, true);
-                }
+                canvas.fontText(5, textY, streetBuf, assets::kTextMedium, colors::White,
+                                310, true);
             }
         }
     }

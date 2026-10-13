@@ -1,5 +1,6 @@
 #include "display/display_driver.h"
 
+#include "config/device_config.h"
 #include "driver/gpio.h"
 #include "driver/ledc.h"
 #include "driver/spi_master.h"
@@ -234,6 +235,8 @@ esp_err_t DisplayDriver::init() {
     ESP_RETURN_ON_ERROR(ledc_channel_config(&channel), kTag, "backlight channel failed");
 
     ready_ = true;
+    ESP_RETURN_ON_ERROR(setInvertColor(DeviceConfig::instance().snapshot().invertColor),
+                        kTag, "Initial LCD color inversion setup failed");
 
     // Clear retained panel GRAM before the UI task starts. The controller can
     // preserve the previous firmware's pixels across an MCU-only reset.
@@ -328,6 +331,19 @@ esp_err_t DisplayDriver::setOrientation(bool mirrored, bool rotated180) {
     return setSt77922Madctl(static_cast<esp_lcd_panel_io_handle_t>(io_), mirrorX, mirrorY);
 #else
     return esp_lcd_panel_mirror(static_cast<esp_lcd_panel_handle_t>(panel_), mirrorX, mirrorY);
+#endif
+}
+
+esp_err_t DisplayDriver::setInvertColor(bool invert) {
+    ESP_RETURN_ON_FALSE(ready_ && panel_ != nullptr, ESP_ERR_INVALID_STATE,
+                        kTag, "Display is not ready");
+    inverted_ = invert;
+#if CONFIG_WAZE_HUD_DISPLAY_35_480X320
+    return esp_lcd_panel_invert_color(static_cast<esp_lcd_panel_handle_t>(panel_), invert);
+#elif CONFIG_WAZE_HUD_DISPLAY_CYD_28
+    return esp_lcd_panel_invert_color(static_cast<esp_lcd_panel_handle_t>(panel_), invert);
+#else
+    return esp_lcd_panel_invert_color(static_cast<esp_lcd_panel_handle_t>(panel_), !invert);
 #endif
 }
 
