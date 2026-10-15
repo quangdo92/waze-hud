@@ -19,7 +19,8 @@ struct DeviceSettings {
     int8_t overspeedOffsetKmh{0};
     int8_t offsetX{0};
     int8_t offsetY{0};
-    uint32_t revision{7};
+    uint8_t backlightPin{21};
+    uint32_t revision{8};
 };
 
 using HlpSendLine = void (*)(const char *line, void *context);

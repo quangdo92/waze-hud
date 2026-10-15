@@ -1,6 +1,7 @@
 #include "config/device_config.h"
 
 #include "sdkconfig.h"
+#include "display/display_driver.h"
 #include "esp_check.h"
 #include "esp_log.h"
 #include "nvs.h"
@@ -13,8 +14,8 @@ namespace waze_hud {
 namespace {
 constexpr char kTag[] = "CONFIG";
 constexpr char kNamespace[] = "hud_cfg";
-constexpr int kItemCount = 9;
-constexpr uint32_t kSchemaRevision = 7;
+constexpr int kItemCount = 10;
+constexpr uint32_t kSchemaRevision = 8;
 
 bool validBrightness(int value) {
     return value >= 10 && value <= 100 && ((value - 10) % 5) == 0;
@@ -79,6 +80,7 @@ esp_err_t saveSettings(const DeviceSettings &settings) {
     if (result == ESP_OK) result = nvs_set_i8(nvs, "over_offset", settings.overspeedOffsetKmh);
     if (result == ESP_OK) result = nvs_set_i8(nvs, "offset_x", settings.offsetX);
     if (result == ESP_OK) result = nvs_set_i8(nvs, "offset_y", settings.offsetY);
+    if (result == ESP_OK) result = nvs_set_u8(nvs, "bk_pin", settings.backlightPin);
     if (result == ESP_OK) result = nvs_set_u32(nvs, "revision", settings.revision);
     if (result == ESP_OK) result = nvs_set_u32(nvs, "schema_ver", kSchemaRevision);
     if (result == ESP_OK) result = nvs_commit(nvs);
@@ -141,6 +143,12 @@ esp_err_t DeviceConfig::init() {
         active_.overspeedOffsetKmh = offset;
     if (nvs_get_i8(nvs, "offset_x", &offset) == ESP_OK && offset >= -5 && offset <= 5) active_.offsetX = offset;
     if (nvs_get_i8(nvs, "offset_y", &offset) == ESP_OK && offset >= -5 && offset <= 5) active_.offsetY = offset;
+    uint8_t bkPin = 0;
+    if (nvs_get_u8(nvs, "bk_pin", &bkPin) == ESP_OK && (bkPin == 21 || bkPin == 27)) {
+        active_.backlightPin = bkPin;
+    } else {
+        active_.backlightPin = 21;
+    }
     (void)nvs_get_u32(nvs, "revision", &active_.revision);
     uint32_t storedSchemaRevision = 0;
     (void)nvs_get_u32(nvs, "schema_ver", &storedSchemaRevision);
@@ -156,9 +164,9 @@ esp_err_t DeviceConfig::init() {
                  static_cast<unsigned long>(kSchemaRevision),
                  static_cast<unsigned long>(active_.revision));
     }
-    ESP_LOGI(kTag, "Loaded revision %lu, fixedBrightness=%d, brightness=%u%%, invertColor=%d",
+    ESP_LOGI(kTag, "Loaded revision %lu, fixedBrightness=%d, brightness=%u%%, invertColor=%d, backlightPin=%u",
              static_cast<unsigned long>(active_.revision), active_.fixedBrightness ? 1 : 0,
-             active_.brightness, active_.invertColor ? 1 : 0);
+             active_.brightness, active_.invertColor ? 1 : 0, active_.backlightPin);
     return ESP_OK;
 }
 
@@ -262,6 +270,19 @@ void DeviceConfig::publishSchema(HlpSendLine send, void *context) {
     cJSON_AddNumberToObject(root, "value", settings.offsetY);
     cJSON_AddNumberToObject(root, "min", -5); cJSON_AddNumberToObject(root, "max", 5); sendJson(root, send, context);
 
+    root = schemaItem(settings.revision, "backlight_pin", "selection", "Chan den nen (GPIO)");
+    cJSON_AddStringToObject(root, "value", settings.backlightPin == 27 ? "27" : "21");
+    cJSON *bkOptions = cJSON_AddArrayToObject(root, "options");
+    const char *bkValues[] = {"21", "27"};
+    const char *bkLabels[] = {"GPIO 21 (Mac dinh)", "GPIO 27 (Bien the)"};
+    for (int i = 0; i < 2; ++i) {
+        cJSON *option = cJSON_CreateObject();
+        cJSON_AddStringToObject(option, "value", bkValues[i]);
+        cJSON_AddStringToObject(option, "label", bkLabels[i]);
+        cJSON_AddItemToArray(bkOptions, option);
+    }
+    sendJson(root, send, context);
+
     root = envelope("cfg_end"); cJSON_AddNumberToObject(root, "rev", settings.revision); sendJson(root, send, context);
     ESP_LOGI(kTag, "Published device configuration revision %lu", static_cast<unsigned long>(settings.revision));
 }
@@ -323,6 +344,11 @@ bool DeviceConfig::handleMessage(const cJSON *root, HlpSendLine send, void *cont
             bit = 1U << 4; valid = exactInteger(value, -5, 5, integer); if (valid) pending.draft.offsetY = integer;
         } else if (std::strcmp(id->valuestring, "fixed_brightness") == 0) {
             bit = 1U << 8; valid = cJSON_IsBool(value); if (valid) pending.draft.fixedBrightness = cJSON_IsTrue(value);
+        } else if (std::strcmp(id->valuestring, "backlight_pin") == 0) {
+            bit = 1U << 9; valid = cJSON_IsString(value);
+            if (valid && std::strcmp(value->valuestring, "21") == 0) pending.draft.backlightPin = 21;
+            else if (valid && std::strcmp(value->valuestring, "27") == 0) pending.draft.backlightPin = 27;
+            else valid = false;
         } else valid = false;
         if ((pending.mask & bit) != 0) valid = false;
         if (!valid) {
@@ -352,6 +378,21 @@ bool DeviceConfig::handleMessage(const cJSON *root, HlpSendLine send, void *cont
             pending.draft.brightness = current.brightness;
             brightnessLocked = true;
         }
+
+        // Kiểm tra và áp dụng chân backlight vào phần cứng trước khi lưu NVS và gửi ACK thành công
+        if (pending.draft.backlightPin != current.backlightPin) {
+            const esp_err_t pinErr = DisplayDriver::instance().setBacklightPin(pending.draft.backlightPin);
+            if (pinErr != ESP_OK) {
+                ESP_LOGE(kTag, "Backlight pin config failed: %s", esp_err_to_name(pinErr));
+                lastTransaction = pending.id;
+                lastTransactionOk = false;
+                lastTransactionRevision = current.revision;
+                sendAck(pending.id, false, current.revision, nullptr, "Backlight pin config failed", send, context);
+                pending = {};
+                return true;
+            }
+        }
+
         pending.draft.revision++;
         const esp_err_t saved = saveSettings(pending.draft);
         lastTransaction = pending.id;
@@ -367,6 +408,15 @@ bool DeviceConfig::handleMessage(const cJSON *root, HlpSendLine send, void *cont
             HudStateStore::instance().refresh();
         } else {
             ESP_LOGE(kTag, "NVS commit failed: %s", esp_err_to_name(saved));
+            if (pending.draft.backlightPin != current.backlightPin) {
+                const esp_err_t rbErr = DisplayDriver::instance().setBacklightPin(current.backlightPin);
+                if (rbErr != ESP_OK) {
+                    ESP_LOGE(kTag, "CRITICAL: Backlight pin rollback to %u failed: %s",
+                             current.backlightPin, esp_err_to_name(rbErr));
+                } else {
+                    ESP_LOGI(kTag, "Backlight pin rollback to %u succeeded", current.backlightPin);
+                }
+            }
             sendAck(pending.id, false, current.revision, nullptr, "NVS write failed", send, context);
         }
         pending = {};

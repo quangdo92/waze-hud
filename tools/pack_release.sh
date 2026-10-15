@@ -2,14 +2,15 @@
 set -e
 
 # Script đóng gói firmware Waze HUD với timestamp (ngày_giờ) vào thư mục releases/
-# Sử dụng: ./tools/pack_release.sh [TARGET_NAME]
-# Ví dụ: ./tools/pack_release.sh CYD2.8-BLE-OTA
+# Sử dụng: ./tools/pack_release.sh [TARGET_NAME] [VERSION]
+# Ví dụ: ./tools/pack_release.sh CYD2.8-BLE b17
 
-TARGET_NAME="${1:-CYD2.8-BLE-OTA}"
+TARGET_NAME="${1:-CYD2.8-BLE}"
+VERSION="${2:-b17}"
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="${PROJECT_ROOT}/waze-hud/build"
 RELEASE_DIR="${PROJECT_ROOT}/releases"
-TIMESTAMP="$(TZ='Asia/Ho_Chi_Minh' date +'%d%m%y_%H%M')"
+TIMESTAMP="${TIMESTAMP:-$(date +'%d%m%y_%H%M')}"
 
 mkdir -p "${RELEASE_DIR}"
 
@@ -18,18 +19,32 @@ if [ ! -f "${BUILD_DIR}/waze_hud_cyd_28.bin" ]; then
     exit 1
 fi
 
-echo "📦 Đang đóng gói firmware cho mục tiêu: ${TARGET_NAME} (Thời gian: ${TIMESTAMP})..."
+echo "📦 Đang đóng gói firmware cho mục tiêu: ${TARGET_NAME} - Phiên bản: ${VERSION} (Thời gian: ${TIMESTAMP})..."
 
-# Kích hoạt ESP-IDF nếu chưa có esptool trong PATH
-if ! command -v esptool.py &> /dev/null && [ -f /workspaces/esp-idf/export.sh ]; then
-    . /workspaces/esp-idf/export.sh >/dev/null 2>&1
+# Kích hoạt môi trường nếu chưa có esptool trong PATH
+if ! python3 -m esptool version &> /dev/null && ! python -m esptool version &> /dev/null; then
+    if [ -f /workspaces/esp-idf/export.sh ]; then
+        . /workspaces/esp-idf/export.sh >/dev/null 2>&1
+    elif compgen -G "/c/Espressif/python_env/*/Scripts" > /dev/null; then
+        for p in /c/Espressif/python_env/*/Scripts; do
+            export PATH="$p:$PATH"
+            break
+        done
+    fi
 fi
 
-FULL_BIN="${RELEASE_DIR}/${TARGET_NAME}-${TIMESTAMP}_full.bin"
-APP_BIN="${RELEASE_DIR}/${TARGET_NAME}-${TIMESTAMP}_app.bin"
+PYTHON_CMD="python3"
+if ! command -v python3 &> /dev/null || ! python3 -m esptool version &> /dev/null; then
+    if python -m esptool version &> /dev/null; then
+        PYTHON_CMD="python"
+    fi
+fi
+
+FULL_BIN="${RELEASE_DIR}/${TARGET_NAME}-${VERSION}-${TIMESTAMP}_full.bin"
+APP_BIN="${RELEASE_DIR}/${TARGET_NAME}-${VERSION}-${TIMESTAMP}_app.bin"
 
 # 1. Ghép toàn bộ thành file nạp 0x0 (Full Flash)
-python3 -m esptool --chip esp32 merge_bin \
+"${PYTHON_CMD}" -m esptool --chip esp32 merge_bin \
   -o "${FULL_BIN}" \
   --flash_mode dio --flash_size 4MB --flash_freq 40m \
   0x1000 "${BUILD_DIR}/bootloader/bootloader.bin" \

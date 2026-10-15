@@ -64,35 +64,16 @@ Khi xuất hiện `Hash of data verified` và `Hard resetting via RTS pin`, quá
 
 Cách này dành cho người phát triển đã cài **ESP-IDF 5.5.5**.
 
-Mở ESP-IDF PowerShell hoặc kích hoạt môi trường ESP-IDF 5.5.5, sau đó chạy tại thư mục `waze-hud`:
+Nhánh này dành cho board CYD 2.8 inch ESP32-WROOM-32 (ESP32 cổ điển, flash 4 MB), không phải ESP32-S3. Cài ESP-IDF 5.5.5, mở PowerShell tại thư mục gốc của mã nguồn rồi kích hoạt môi trường và build:
 
 ```powershell
-idf.py set-target esp32s3
-idf.py build
-idf.py -p COM9 flash
-```
-
-Lệnh `idf.py flash` sử dụng đúng layout của project:
-
-| Thành phần | Offset |
-| --- | ---: |
-| Bootloader | `0x0` |
-| Partition table | `0x8000` |
-| OTA data | `0xF000` |
-| Ứng dụng `ota_0` | `0x20000` |
-
-Để chỉ build và tạo BIN mà không flash:
-
-```powershell
-idf.py set-target esp32s3
+Set-Location .\waze-hud
+. 'C:\Espressif\frameworks\esp-idf-v5.5.5\export.ps1'
+idf.py set-target esp32
 idf.py build
 ```
 
-Ứng dụng sau khi build nằm tại:
-
-```text
-build/waze_hud_tdisplay_s3.bin
-```
+Để chỉ build mà không nạp firmware, hai lệnh `idf.py set-target esp32` và `idf.py build` là đủ. BIN ứng dụng được tạo tại `build\waze_hud_cyd_28.bin`; đây là image ứng dụng cho phân vùng OTA, không phải factory BIN để nạp tại offset `0x0`. Theo bảng phân vùng của project, ứng dụng bắt đầu tại `0x20000`.
 
 ## Phân biệt factory BIN và OTA BIN
 

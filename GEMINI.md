@@ -11,6 +11,9 @@
 3. **Thử nghiệm trên 1 nhánh mục tiêu trước khi nhân rộng ra 5 nhánh**:
    - Mọi tính năng mới hoặc thay đổi giao diện/protocol chỉ được triển khai và kiểm chứng trên 1 nhánh chính trước (mặc định là `CYD2.8-V2USB` tại `/workspaces/waze-hud`).
    - Chỉ khi người dùng xác nhận đạt yêu cầu hoặc yêu cầu phát hành đồng loạt thì mới đồng bộ sang 4 nhánh còn lại (`CYD2.8-V1USB`, `2.8-in-CYD-USB`, `CYD2.8-V1USB-Serial`, `CYD3.5`), và phải kiểm tra kỹ sự khác biệt phần cứng/transport của từng nhánh khi merge.
+4. **Chỉ biên dịch (Build) và đóng gói Firmware khi có lệnh yêu cầu rõ ràng từ người dùng**:
+   - Tuyệt đối không tự ý chạy build hoặc đóng gói firmware sau mỗi lần sửa code / phản hồi review nếu người dùng chưa yêu cầu.
+   - Sau khi hoàn thành sửa code hoặc trả lời review, chỉ rà soát code logic, cập nhật tài liệu / sổ bàn giao và dừng lại; chỉ kích hoạt lệnh biên dịch (ninja / idf.py / pack_release) khi người dùng ra lệnh trực tiếp (ví dụ: "build", "build đi", "hãy build", v.v.).
 
 ---
 
@@ -23,8 +26,8 @@ HUD là bên **sở hữu và định nghĩa danh mục cài đặt**, khai báo
    - Khi App phản hồi bản tin bắt tay `hi` có chứa `"caps": ["device_config"]`:
      - HUD gọi `DeviceConfigManager::handleProducerHello(root)`.
      - HUD tự động phát chuỗi khai báo cấu hình gồm:
-       1. `cfg_begin`: chứa phiên bản schema (`rev = kSchemaRevision`, hiện tại là `7`) và tổng số mục cài đặt (`count = kItemCount`, hiện tại là `9`).
-       2. `9` gói `cfg_item`: khai báo từng mục cài đặt (`id`, `kind`, `label`, `min`/`max`/`step` hoặc `options`, và giá trị hiện tại `value` đang lưu trong NVS của HUD):
+       1. `cfg_begin`: chứa phiên bản schema (`rev = kSchemaRevision`, hiện tại là `8`) và tổng số mục cài đặt (`count = kItemCount`, hiện tại là `10`).
+       2. `10` gói `cfg_item`: khai báo từng mục cài đặt (`id`, `kind`, `label`, `min`/`max`/`step` hoặc `options`, và giá trị hiện tại `value` đang lưu trong NVS của HUD):
           - `1`: `fixed_brightness` (Cố định độ sáng - `toggle`: Khi ON cho phép chỉnh mục 2 và ưu tiên cao hơn sáng tự động theo giờ; khi OFF khóa mục 2 và quay về độ sáng theo giờ `100%` ngày / `20%` đêm)
           - `2`: `brightness` (Độ sáng màn hình `10–100%`, bước `5%`)
           - `3`: `theme` (Giao diện: Tự động / Ban ngày / Ban đêm)
@@ -34,16 +37,17 @@ HUD là bên **sở hữu và định nghĩa danh mục cài đặt**, khai báo
           - `7`: `overspeed_offset` (Ngưỡng cảnh báo tốc độ `-10..+5 km/h`)
           - `8`: `offset_x` (Dịch ngang X `-5..+5 px`)
           - `9`: `offset_y` (Dịch dọc Y `-5..+5 px`)
+          - `10`: `backlight_pin` (Chân đèn nền LCD - `selection`: `21` - GPIO 21 Mặc định / `27` - GPIO 27 Biến thể; tương thích mọi lô board CYD 2.8" chống tối màn hình)
        3. `cfg_end`: kết thúc khai báo với `rev` tương ứng.
 2. **Chiều từ App ngược về HUD (Tương tác thay đổi cài đặt)**:
    - Khi người dùng chỉnh cài đặt trên App, App gửi một transaction nguyên tử (atomic transaction) về HUD:
-     1. `cfg_set_begin`: mở phiên cập nhật với mã giao dịch `tx` và `count = 9`.
+     1. `cfg_set_begin`: mở phiên cập nhật với mã giao dịch `tx` và `count = 10`.
      2. `cfg_set`: gửi từng cặp `id` và giá trị mới `val` (HUD lưu tạm vào `pending_.draft` và đánh dấu bit vào `receivedMask`).
      3. `cfg_set_commit`: yêu cầu áp dụng giao dịch `tx`.
-   - Khi nhận `cfg_set_commit`, HUD kiểm tra đủ mặt nạ bit (`receivedMask == (1 << kItemCount) - 1`), lưu vào NVS (`hud_cfg`), tăng `revision`, cập nhật `HudStateStore` để `HudRenderer` áp dụng ngay (độ sáng, lật gương, xoay màn hình, giao diện...), và gửi `cfg_ack` (`ok: true`, `tx`, `rev`) về App.
+   - Khi nhận `cfg_set_commit`, HUD kiểm tra đủ mặt nạ bit (`receivedMask == (1 << kItemCount) - 1`), lưu vào NVS (`hud_cfg`), tăng `revision`, cập nhật `HudStateStore` để `HudRenderer` áp dụng ngay (độ sáng, chân đèn nền, lật gương, xoay màn hình, giao diện...), và gửi `cfg_ack` (`ok: true`, `tx`, `rev`) về App.
 3. **Các nguyên tắc bất khả xâm phạm của giao thức HLP**:
    - **Không bao giờ gửi lại `dev` khi nhận `hi`**: Bản tin `hi` từ App không chứa trường `fields`. Việc gọi `sendDeviceDeclaration()` trong nhánh xử lý `hi` sẽ gây vòng lặp `dev` $\leftrightarrow$ `hi` vô tận, làm reset session liên tục, xóa trắng `HudState` (mất phân làn) và hủy giao dịch cài đặt.
-   - **Không chèn `vTaskDelay` lớn trong `DeviceConfigManager::sendJson`**: Việc phát 11 bản tin `cfg_*` nằm trên cùng `hlp_task`; chèn delay tại đây sẽ làm nghẽn hàng đợi nhận `cfg_set_*` và `state`. Việc chia nhỏ gói BLE (20 byte/chunk, nghỉ 3ms giữa các chunk) do tầng `BleTransport::sendLine` đảm nhiệm.
+   - **Không chèn `vTaskDelay` lớn trong `DeviceConfigManager::sendJson`**: Việc phát các bản tin `cfg_*` nằm trên cùng `hlp_task`; chèn delay tại đây sẽ làm nghẽn hàng đợi nhận `cfg_set_*` và `state`. Việc chia nhỏ gói BLE (20 byte/chunk, nghỉ 3ms giữa các chunk) do tầng `BleTransport::sendLine` đảm nhiệm.
    - Khi thêm/bớt bất kỳ mục cài đặt nào trên HUD, phải cập nhật đồng bộ: `kSchemaRevision`, `kItemCount`, enum `ItemId`, `sendItem()`, `applyItemValue()`, và `saveToNvs()` / `loadFromNvs()`.
 
 ---
@@ -98,3 +102,30 @@ Trong **tất cả** các bản phát hành (GitHub Releases, `CHANGELOG.md`, `R
 2. **Tuyên bố minh bạch về việc phát triển bằng AI & Mục đích Cá nhân**:
    - Bản phát triển WazeHUD trên kho mã nguồn này là phiên bản cá nhân hóa, được xây dựng và tối ưu hóa mở rộng hoàn toàn dựa trên sự hỗ trợ của **AI** (Google Gemini / Antigravity pair programming).
    - Mục đích chính của dự án là phục vụ nhu cầu nghiên cứu, độ chế và sử dụng thực tế trên xe của **cá nhân tác giả**, đồng thời chia sẻ công khai mã nguồn mở cho các anh em cộng đồng có cùng sở thích tham khảo.
+
+---
+
+## 5. Quy tắc Đặt tên Firmware & Đóng gói Phát hành (`Release Artifacts & Naming Convention`)
+
+Mọi file firmware khi đóng gói phát hành (qua `./tools/pack_release.sh` hoặc đưa lên GitHub Releases) bắt buộc phải tuân theo cấu trúc chuẩn sau:
+
+$$\mathbf{[TARGET]\text{-}[VERSION]\text{-}[DDMMYY\_HHMM]\_[TYPE].bin}$$
+
+### 5.1. Bóc tách các thành phần
+1. **`[TARGET]` (Mục tiêu phần cứng & giao thức)**:
+   - `CYD2.8-BLE`: Bản Bluetooth BLE cho màn 2.8" (hợp nhất 1-USB và 2-USB).
+   - `CYD2.8-USB`: Bản cắm cáp USB Serial 115200 cho màn 2.8".
+   - `CYD3.5-BLE`: Bản Bluetooth BLE cho module ESP32-S3 3.5" ST77922.
+2. **`[VERSION]` (Số hiệu bản build / phiên bản)**:
+   - Viết thường kèm số build, ví dụ: `b16`, `b17`, `b18`...
+3. **`[DDMMYY_HHMM]` (Thời điểm xuất bản theo giờ Việt Nam `Asia/Ho_Chi_Minh`)**:
+   - `DDMMYY`: 2 số ngày, 2 số tháng, 2 số năm (ví dụ `151026` = 15/10/2026).
+   - `HHMM`: 2 số giờ, 2 số phút theo định dạng 24h (ví dụ `0830` = 08:30).
+   - Ngăn cách giữa ngày và giờ bằng dấu gạch dưới `_`.
+4. **`_[TYPE].bin` (Phân loại phương thức nạp firmware)**:
+   - **`_full.bin` (Bản Factory nạp Full Flash qua cáp USB)**: Ghép toàn bộ Bootloader (`0x1000`), Partition Table (`0x8000`), OTA Data (`0xf000`) và App (`0x20000`). Nạp ở offset duy nhất **`0x0`** bằng Web Flasher hoặc esptool trên máy tính. Dùng khi nạp lần đầu lên bản có OTA hoặc khi cứu máy.
+   - **`_app.bin` (Bản cập nhật không dây WiFi Web OTA)**: Chỉ chứa riêng phân vùng ứng dụng (app partition). Dùng để upload trực tiếp qua trình duyệt web trên điện thoại (`http://192.168.4.1`) mà không cần tháo màn hay cắm cáp.
+
+### 5.2. Ví dụ chuẩn
+- `CYD2.8-BLE-b17-151026_0830_full.bin`
+- `CYD2.8-BLE-b17-151026_0830_app.bin`

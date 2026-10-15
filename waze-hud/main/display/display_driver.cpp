@@ -392,7 +392,13 @@ esp_err_t DisplayDriver::init() {
     timer.clk_cfg = LEDC_AUTO_CLK;
     ESP_RETURN_ON_ERROR(ledc_timer_config(&timer), kTag, "backlight timer failed");
     ledc_channel_config_t channel{};
+#if CONFIG_WAZE_HUD_DISPLAY_CYD_28
+    const uint8_t configuredPin = DeviceConfig::instance().snapshot().backlightPin;
+    backlightPin_ = (configuredPin == 27) ? 27 : 21;
+    channel.gpio_num = static_cast<gpio_num_t>(backlightPin_);
+#else
     channel.gpio_num = kBacklight;
+#endif
     channel.speed_mode = LEDC_LOW_SPEED_MODE;
     channel.channel = LEDC_CHANNEL_0;
     channel.intr_type = LEDC_INTR_DISABLE;
@@ -515,10 +521,85 @@ esp_err_t DisplayDriver::drawRegion(const Rect &region, uint16_t *pixels) {
 }
 
 esp_err_t DisplayDriver::setBrightness(uint8_t percent) {
-    percent = percent > 100 ? 100 : percent;
-    const uint32_t duty = (1023U * percent) / 100U;
+    currentBrightness_ = percent > 100 ? 100 : percent;
+    const uint32_t duty = (1023U * currentBrightness_) / 100U;
     ESP_RETURN_ON_ERROR(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, duty), kTag, "brightness duty failed");
     return ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
+}
+
+esp_err_t DisplayDriver::setBacklightPin(uint8_t pin) {
+#if CONFIG_WAZE_HUD_DISPLAY_CYD_28
+    if (pin != 21 && pin != 27) return ESP_ERR_INVALID_ARG;
+    if (pin == backlightPin_) return ESP_OK;
+
+    const uint8_t oldPin = backlightPin_;
+    ESP_LOGI(kTag, "Switching backlight GPIO from %u to %u", oldPin, pin);
+    const esp_err_t stopErr = ledc_stop(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0);
+    if (stopErr != ESP_OK) {
+        ESP_LOGE(kTag, "ledc_stop failed on old pin %u: %s", oldPin, esp_err_to_name(stopErr));
+        return stopErr;
+    }
+    ledc_channel_config_t channel{};
+    const esp_err_t rstErr = gpio_reset_pin(static_cast<gpio_num_t>(oldPin));
+    if (rstErr != ESP_OK) {
+        ESP_LOGE(kTag, "gpio_reset_pin failed on old pin %u: %s", oldPin, esp_err_to_name(rstErr));
+        channel.gpio_num = static_cast<gpio_num_t>(oldPin);
+        channel.speed_mode = LEDC_LOW_SPEED_MODE;
+        channel.channel = LEDC_CHANNEL_0;
+        channel.intr_type = LEDC_INTR_DISABLE;
+        channel.timer_sel = LEDC_TIMER_0;
+        channel.duty = (1023U * currentBrightness_) / 100U;
+        ledc_channel_config(&channel);
+        ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
+        return rstErr;
+    }
+
+    channel.gpio_num = static_cast<gpio_num_t>(pin);
+    channel.speed_mode = LEDC_LOW_SPEED_MODE;
+    channel.channel = LEDC_CHANNEL_0;
+    channel.intr_type = LEDC_INTR_DISABLE;
+    channel.timer_sel = LEDC_TIMER_0;
+    channel.duty = (1023U * currentBrightness_) / 100U;
+
+    esp_err_t err = ledc_channel_config(&channel);
+    if (err == ESP_OK) {
+        err = ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
+    }
+
+    if (err != ESP_OK) {
+        ESP_LOGE(kTag, "Backlight reconfig to pin %u failed: %s, rolling back to pin %u",
+                 pin, esp_err_to_name(err), oldPin);
+        const esp_err_t rbStop = ledc_stop(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0);
+        if (rbStop != ESP_OK) {
+            ESP_LOGW(kTag, "ledc_stop failed during rollback on pin %u: %s", pin, esp_err_to_name(rbStop));
+        }
+        const esp_err_t rbRst = gpio_reset_pin(static_cast<gpio_num_t>(pin));
+        if (rbRst != ESP_OK) {
+            ESP_LOGW(kTag, "gpio_reset_pin failed during rollback on pin %u: %s", pin, esp_err_to_name(rbRst));
+        }
+
+        channel.gpio_num = static_cast<gpio_num_t>(oldPin);
+        const esp_err_t rbChan = ledc_channel_config(&channel);
+        const esp_err_t rbDuty = (rbChan == ESP_OK)
+            ? ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0)
+            : rbChan;
+
+        if (rbStop != ESP_OK || rbRst != ESP_OK || rbChan != ESP_OK || rbDuty != ESP_OK) {
+            ESP_LOGE(kTag, "CRITICAL: Backlight rollback to pin %u failed (stop=%s, rst=%s, chan=%s, duty=%s). Hardware in inconsistent state!",
+                     oldPin, esp_err_to_name(rbStop), esp_err_to_name(rbRst),
+                     esp_err_to_name(rbChan), esp_err_to_name(rbDuty));
+        } else {
+            ESP_LOGI(kTag, "Backlight rollback to pin %u succeeded", oldPin);
+        }
+        return err;
+    }
+
+    backlightPin_ = pin;
+    return ESP_OK;
+#else
+    (void)pin;
+    return ESP_OK;
+#endif
 }
 
 esp_err_t DisplayDriver::setOrientation(bool mirrored, bool rotated180) {

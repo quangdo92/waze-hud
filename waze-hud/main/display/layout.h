@@ -39,8 +39,8 @@ constexpr int Width = 320;
 constexpr int Height = 240;
 constexpr int PhysicalWidth = 320;
 constexpr int PhysicalHeight = 240;
-constexpr int MainHeight = 130;
-constexpr int StreetHeight = 28;
+constexpr int MainHeight = 142;
+constexpr int StreetHeight = 26;
 constexpr int GuidanceHeight = Height - MainHeight - StreetHeight;
 #else
 constexpr bool IsLargeDisplay = false;
@@ -61,6 +61,10 @@ constexpr Rect Maneuver{0, 0, 85, MainHeight};
 // These logical widths map to landscape x={0,128,336,480}.
 constexpr Rect SpeedCluster{85, 0, 139, MainHeight};
 constexpr Rect Alerts{224, 0, 96, MainHeight};
+#elif CONFIG_WAZE_HUD_DISPLAY_CYD_28
+constexpr Rect SpeedCluster{72, 0, 124, MainHeight};
+constexpr Rect MainCluster{0, 0, 196, MainHeight};
+constexpr Rect Alerts{196, 0, 124, MainHeight};
 #else
 constexpr Rect SpeedCluster{85, 0, 140, MainHeight};
 constexpr Rect MainCluster{0, 0, 225, MainHeight};

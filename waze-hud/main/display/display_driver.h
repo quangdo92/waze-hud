@@ -13,6 +13,7 @@ public:
     esp_err_t init();
     esp_err_t drawRegion(const Rect &region, uint16_t *pixels);
     esp_err_t setBrightness(uint8_t percent);
+    esp_err_t setBacklightPin(uint8_t pin);
     esp_err_t setOrientation(bool mirrored, bool rotated180);
     esp_err_t setInvertColor(bool invert);
     bool ready() const { return ready_; }
@@ -27,6 +28,8 @@ private:
     bool mirrored_{false};
     bool rotated180_{false};
     bool inverted_{false};
+    uint8_t backlightPin_{21};
+    uint8_t currentBrightness_{100};
 };
 
 }  // namespace waze_hud

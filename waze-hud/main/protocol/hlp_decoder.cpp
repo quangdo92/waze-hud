@@ -5,6 +5,7 @@
 #include "esp_timer.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 
 namespace waze_hud {
@@ -49,6 +50,25 @@ void copyUtf8(const cJSON *root, const char *key, std::array<char, Capacity> &de
     std::size_t count = std::min<std::size_t>(std::strlen(item->valuestring), Capacity - 1);
     while (count > 0 && !hlp_utf8_valid(reinterpret_cast<const uint8_t *>(item->valuestring), count)) --count;
     std::memcpy(destination.data(), item->valuestring, count);
+}
+
+template <std::size_t Capacity>
+void shortenContinueStraight(std::array<char, Capacity> &text) {
+    static constexpr const char *kPrefixes[] = {
+        "Tiếp tục đi thẳng",
+        "tiếp tục đi thẳng",
+        "TIẾP TỤC ĐI THẲNG"
+    };
+    for (const char *prefix : kPrefixes) {
+        const std::size_t prefixLen = std::strlen(prefix);
+        if (std::strncmp(text.data(), prefix, prefixLen) == 0) {
+            char temp[Capacity]{};
+            const char *rem = text.data() + prefixLen;
+            std::snprintf(temp, sizeof(temp), "Đi thẳng%s", rem);
+            std::memcpy(text.data(), temp, sizeof(temp));
+            break;
+        }
+    }
 }
 
 Maneuver maneuverValue(int value) {
@@ -229,6 +249,8 @@ bool HlpDecoder::decodeState(const cJSON *root, HudState &state) {
     decoded.roundaboutExit = std::max(0, integerOr(root, "exit", 0));
     copyUtf8(root, "st", decoded.currentStreet);
     copyUtf8(root, "st2", decoded.nextStreet);
+    shortenContinueStraight(decoded.nextStreet);
+    shortenContinueStraight(decoded.currentStreet);
     copyUtf8(root, "eta", decoded.eta);
     decoded.remainingMinutes = std::max(0, integerOr(root, "rmin", 0));
     const int exactRemainingMeters = integerOr(root, "rm", -1);

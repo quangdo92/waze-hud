@@ -4,6 +4,65 @@ Dự án WazeHUD tối ưu cho màn hình ESP32-2432S028 (CYD 2.8 inch). Toàn b
 
 ---
 
+## [Build 17 (v2.8.17-b17)] - 2026-10-15
+
+> [!NOTE]
+> **Lời Cảm Ơn Tác Giả Gốc & Tuyên Bố Dự Án:**
+> - Bản phát triển WazeHUD trên repository này là phiên bản cá nhân hóa, được xây dựng và tối ưu mở rộng hoàn toàn dựa trên sự hỗ trợ của **AI (Google Gemini / Antigravity)** với mục đích chính là phục vụ nhu cầu sử dụng thực tế trên xe của cá nhân mình và chia sẻ mã nguồn mở cho cộng đồng cùng tham khảo.
+> - Xin trân trọng gửi lời cảm ơn chân thành và sâu sắc nhất tới **Tác giả gốc [ShindouAris (WazeHUD)](https://github.com/ShindouAris/WazeHUD)** cùng cộng đồng **[WazeMod Vietnam](https://wazemod.io.vn)** đã tạo nên nền tảng phần mềm tuyệt vời này!
+
+> Bản phát hành B17 nâng cấp **HLP Device Config Schema Rev 8 (10 mục)** hỗ trợ chuyển đổi động chân đèn nền **GPIO 21 $\leftrightarrow$ 27** trực tiếp từ App, khôi phục **Biển báo giới hạn tốc độ To Cực Đại ($R = 60\text{ px}$)** ở mọi chế độ lái, tái cấu trúc tỷ lệ hàng màn hình ($142\text{px} - 26\text{px} - 72\text{px}$), tích hợp **Chế độ trượt chữ Marquee linh hoạt** cho thanh Đường hiện tại kết hợp hiển thị ETA cố định màu Cyan, loại bỏ chữ "TỰ DO" thừa thãi, và tự động gọt gọn chỉ dẫn `"Tiếp tục đi thẳng"` thành `"Đi thẳng"`.
+
+### ⚙️ Nâng cấp Chuẩn Cài đặt HLP Device Config Schema Rev 8 (10 mục)
+- **Mục 10 (`backlight_pin` - Chân đèn nền LCD, selection):**
+  - Cho phép người dùng chuyển đổi chân đèn nền giữa **GPIO 21 (Mặc định)** và **GPIO 27 (Biến thể)** trực tiếp từ App WazeMod trên điện thoại.
+  - Tương thích tức thì với mọi lô board màn hình ESP32-2432S028 trên thị trường, khắc phục triệt để tình trạng màn hình bị tối đen do khác chân backlight mà không cần phải chỉnh code nạp lại firmware.
+
+### 🛑 Khôi phục Biển Giới Hạn Tốc Độ To Cực Đại ($R=60\text{ px}$) & Huy Hiệu Tốc Độ Lồng Tinh Tế
+- **Khôi phục biển to cực đại:** Phóng to biển báo tốc độ lên kích thước cực đại (bán kính $R = 60\text{ px}$, đường kính $120\text{ px}$) ở cả chế độ Chạy Tự Do và Dẫn Đường Waze.
+- **Huy hiệu tốc độ lồng ghép tinh tế (Nested Speed Badge):**
+  - Cạnh ngoài cùng bên phải của huy hiệu ($W=38, H=28$) được căn trùng khớp hoàn hảo với cạnh ô vuông bao trùm biển báo giới hạn tốc độ ($signX + 60 = 194$, $badgeX = 156$).
+  - Huy hiệu ăn sâu vào góc dưới bên phải của viền đỏ mà hoàn toàn không đè lấn số chỉ tốc độ ở tâm, đồng thời giải phóng tối đa không gian cho cụm bên phải.
+- **Cân đối tỷ lệ cột bên trái (`leftColWidth = 72px`, tâm `cx = 36`):**
+  - **Chạy tự do:** Chuyển đồng hồ sang font `kTextMedium` (cao 22px, ngang ~50px), căn giữa đều 2 lề 11px không còn bị cấn viền. Thứ ở $y = 16$, vạch kẻ ở $y = 74$, ngày tháng ở $y = 84$.
+  - **Dẫn đường:** Căn giữa dọc và ngang đối xứng hoàn hảo cụm điều hướng. Mũi tên 60x60 đặt ở `assetX = 6, maneuverAssetY = 41` (vùng ink $y = 42 \dots 99$). Khoảng cách số mét font `kTextMedium` dời xuống $y = 102$ (vùng ink $y = 108 \dots 119$). Đảm bảo lề trên (cách banner) và lề dưới (cách đáy cụm) đều bằng đúng **$22\text{ px}$**, khoảng trống giữa icon và chữ đạt **$8\text{ px}$** thông thoáng.
+  - **Vector fallback:** Đặt `top = 44, bottom = 97, roundaboutCenterY = 70, junctionY = 75, drawRoundaboutExit centerY = 70` bù trừ stroke thickness 5px giữ ink hoàn toàn trong phạm vi an toàn.
+- **Tính nguyên tử & Rollback an toàn cho Chân đèn nền (Backlight Pin):**
+  - Trong `DisplayDriver::setBacklightPin()`: Kiểm tra toàn bộ mã lỗi `ledc_stop()`, `gpio_reset_pin()`, `ledc_channel_config()` và `ledc_update_duty()`. Tự động rollback phần cứng về pin cũ nếu có lỗi, log `ESP_LOGE` và không thay đổi trạng thái driver/NVS khi cấu hình thất bại.
+  - Trong `DeviceConfigManager::handleSetCommit()`: Rollback phần cứng an toàn kèm kiểm tra mã lỗi khi lưu NVS thất bại.
+- **Khắc phục triệt để lỗi lẹm đỉnh biển báo:** Điều chỉnh thứ tự vẽ (layering) đưa banner tên đường tiếp theo ($y = 0 \dots 19$) vẽ trước, biển báo tròn đỏ to cực đại ($y = 20 \dots 140$) vẽ sau, đảm bảo hình tròn đỏ hiển thị hoàn hảo 100%, không bao giờ bị cắt vạt ngang.
+
+### 🔔 Mở Rộng Cụm Cảnh Báo (`layout::Alerts`, $W=124\text{ px}$) & Nâng Cấp Hiển Thị 3 Biển Đồng Thời
+- **Mở rộng cụm cảnh báo:** Tận dụng không gian sau khi thu gọn biển tốc độ, ranh giới `layout::Alerts` được mở rộng từ 95px lên **124px** (tăng thêm gần 30% bề ngang).
+- **Hệ thống hiển thị cảnh báo theo chuẩn Quy tắc 3.2:**
+  - **Khi không có phân làn (`laneCount == 0`):**
+    - Cụm bên phải (`Alerts`) dành toàn bộ hiển thị **DUY NHẤT 1 Biển VIP ưu tiên cao nhất** to cực đại ($R=20$, font `kTextMedium` ở $y=84$).
+    - Thanh đáy (`Guidance`) hiển thị các cảnh báo tiếp theo dưới dạng 1 đến 4 thẻ card rộng rãi, trực quan và không bao giờ lặp lại biển VIP ở trên.
+  - **Khi có phân làn (`laneCount > 0`):**
+    - Thanh đáy dành trọn vẹn cho mũi tên phân làn.
+    - Cụm bên phải hiển thị linh hoạt 2 tầng: Tầng trên biển VIP $R=16$ ($y=40$); Tầng dưới: nếu có 1 biển phụ thì căn giữa ($R=13$), nếu có $\ge 2$ biển phụ thì hiển thị **song song 2 biển phụ nhỏ** ($R=13$, mỗi cột rộng 58px) giúp tài xế theo dõi đồng thời tới **3 biển cảnh báo** mà không bị sót.
+
+### 🏷️ Thanh Đường Hiện Tại & ETA Trượt Marquee Linh Hoạt
+- **Bên phải:** Cố định thông tin **`ETA 12:34`** (màu Cyan) rõ ràng, sắc nét.
+- **Bên trái:** Hiển thị **`HT: [Tên đường hiện tại]`**.
+- **Cơ chế trượt chữ Marquee linh hoạt:** Nếu tên đường dài vượt quá khoảng trống khả dụng (trừ đi phần ETA), chữ sẽ tự động trượt mượt mà 30 FPS. Nếu tên đường ngắn thì hiển thị tĩnh đứng yên, không bao giờ bị đè lấn sang phần ETA.
+
+### 🧭 Tối giản Giao diện & Rút gọn Chỉ dẫn
+- **Bỏ chữ "TỰ DO":** Loại bỏ hoàn toàn dòng chữ "TỰ DO" màu xanh lá cây ở đáy cột bên trái. Căn chỉnh lại khoảng cách Thứ $\rightarrow$ Giờ to $\rightarrow$ Đường phân cách $\rightarrow$ Ngày tháng năm giúp màn hình thoáng đãng, sang trọng.
+- **Rút gọn chỉ dẫn:** Tự động phát hiện và rút gọn cụm `"Tiếp tục đi thẳng"` thành `"Đi thẳng"` (ví dụ: `"Tiếp tục đi thẳng trên QL1A"` $\rightarrow$ `"Đi thẳng trên QL1A"`), tiết kiệm không gian hiển thị, dễ đọc nhanh khi lái xe.
+
+### 🚦 Tối Giản Cảnh Báo Kẹt Xe & Khắc Phục Triệt Để Giao Cắt Đồng Hồ / Vòng Severity
+- **Tối giản hiển thị kẹt xe:** Loại bỏ số phút kẹt (`+%d PH`), chỉ hiển thị nhãn mức độ ùn tắc ngắn gọn (`NHẸ`, `VỪA`, `NẶNG`, `ĐỨNG IM`, `ĐƯỜNG ĐÓNG`), không bao giờ bị tràn biên ngang hay cấn viền.
+- **Khắc phục giao cắt đồng hồ & vòng severity:** Đưa đồng hồ lên `clockY = 1` và vẽ sau cùng (overlay priority); thu gọn vòng severity biển 2 tầng thành $R = 18$ dày 1px, đảm bảo khoảng cách an toàn 4px so với đồng hồ, triệt tiêu 100% hiện tượng xước/mất nét số giờ.
+- **Hệ tọa độ dọc đồng bộ 4 scanlines clearance:** Đặt biển chính $y = 35$, số mét $y = 53$, nhãn kẹt xe $y = 68$, icon phụ $y = 102$, số mét phụ $y = 121$. Mọi tầng hiển thị đều có khoảng trống an toàn $\ge 4\text{ px}$.
+
+### 📦 Danh Mục Firmware Đóng Gói Bản Build 17
+Toàn bộ file firmware phát hành được lưu trữ tại thư mục [`releases/`](file:///d:/waze-hud-CYD2.8-V2USB/releases):
+- **`CYD2.8-BLE-b17-151026_1405_full.bin`** (1.981.344 bytes): Bản Factory Full Flash nạp qua cáp USB trên máy tính từ offset duy nhất `0x0`.
+- **`CYD2.8-BLE-b17-151026_1405_app.bin`** (1.850.272 bytes): Bản WiFi Web OTA nạp không dây trực tiếp từ trình duyệt điện thoại (`0xE9` header).
+
+---
+
 ## [Build 16 (v2.8.16-b16)] - 2026-10-14
 
 > [!NOTE]
