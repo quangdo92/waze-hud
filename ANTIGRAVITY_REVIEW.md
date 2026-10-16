@@ -577,5 +577,51 @@ Không ghi đè hoặc hoàn tác thay đổi chưa được giao; kiểm tra di
 - **Yêu cầu bên kia kiểm tra:**
   - Copilot rà soát lại bounds của battery indicator mới tại `Alerts` và xác nhận không còn giao cắt với `MainCluster` banner.
 
+---
+
+#### Tinh Chỉnh Bố Cục Chạy Tự Do (Thứ Trái - Ngày Giữa - Giờ Phải & HT: Tên Đường)
+
+- **Bên thực hiện:** Antigravity (theo yêu cầu trực tiếp của người dùng).
+- **Phân tích & Tinh chỉnh chi tiết:**
+  1. **Dải Header trên cùng ở Chế độ Tự do ($y = 0 \dots 19$):**
+     - Bố cục 3 thành phần trải đều toàn bộ chiều rộng 320 px:
+       - **Thứ (`DDD`)**: Căn lề **TRÁI** tại $x = 6, y = 1$ (font `kTextMedium`, màu Cyan, ví dụ `CHỦ NHẬT`, `THỨ HAI`, `THỨ SÁU`...).
+       - **Ngày tháng năm (`dd/mm/yyyy`)**: Căn **CHÍNH GIỮA** màn hình tại trục $x = 160$ (font `kTextMedium`, màu Trắng, ví dụ `16/10/2026`). Phần $x = 110 \dots 195$ vẽ trên `MainCluster`, phần $x = 196 \dots 210$ vẽ tiếp nối trên `Alerts` thông qua canvas bounds clip liền mạch.
+       - **Giờ phút (`hh:mm`)**: Căn lề **PHẢI** sát mép phải màn hình tại $x = 316, y = 1$ (font `kTextMedium`, màu Trắng).
+     - **Lược bỏ pin trên CYD 2.8":** Theo xác nhận của người dùng, màn hình CYD cắm xe chạy nguồn 5V USB trực tiếp, không sử dụng pin; đã loại bỏ hoàn toàn khối vẽ pin trên CYD 2.8", giải phóng 100% không gian banner trên cùng.
+  2. **Thanh Đường Hiện Tại (`Street`, hàng giữa) ở Chế độ Tự do:**
+     - Luôn thêm tiền tố `"HT: "` trước tên đường (`HT: [Tên đường]`).
+     - Căn lề **TRÁI** tại $x = 8$. Khi tên đường dài thì tự động kích hoạt chế độ chạy chữ trượt marquee mượt mà 30 FPS.
+- **File đã sửa:**
+  - `waze-hud/main/display/hud_renderer.cpp`
+- **Kiểm tra đã chạy và kết quả:**
+  - Biên dịch ninja hoàn tất 9/9 steps thành công 100%, 0 cảnh báo/lỗi (`0x1c3bf0` bytes binary).
+  - Đóng gói firmware xuất xưởng thành công 2 file vào `releases/`:
+    - `CYD2.8-BLE-b17-161026_1536_full.bin` (1.981.424 bytes, nạp qua cáp USB ở offset 0x0)
+    - `CYD2.8-BLE-b17-161026_1536_app.bin` (1.850.352 bytes, nạp Web OTA qua WiFi)
+
+---
+
+#### Hạ Biển Báo Giới Hạn Tốc Độ & Ô Tốc Độ Cân Đối Khoảng Cách
+
+- **Bên thực hiện:** Antigravity (theo yêu cầu trực tiếp của người dùng).
+- **Chi tiết tinh chỉnh:**
+  - `signY`: Đổi từ `80` $\rightarrow$ `82` (hạ tâm xuống 2 px).
+  - Bán kính biển báo: `outerRadius = 58` (đường kính 116 px), `innerRadius = 49`.
+    - Đỉnh biển báo: $82 - 58 = 24$ (cách mép dưới banner đường tiếp theo 4 px thoáng đãng, không còn bị dí sát).
+    - Đáy biển báo: $82 + 58 = 140$ (cách ranh giới thanh đường hiện tại đúng 2 px).
+  - Ô tốc độ hiện tại (`badge`):
+    - `badgeY`: Đổi từ `110` $\rightarrow$ `112` (hạ xuống 2 px).
+    - Đáy ô tốc độ: $112 + 28 = 140$ (phẳng hàng ngang với đáy biển báo tại $y = 140$).
+- **File đã sửa:**
+  - `waze-hud/main/display/hud_renderer.cpp`
+- **Kết quả biên dịch & đóng gói:**
+  - Biên dịch ninja 9/9 steps hoàn tất thành công 100%, 0 lỗi (`0x1c3bf0`).
+  - Đóng gói phát hành OTA:
+    - `releases/CYD2.8-BLE-b17-161026_1546_app.bin` (1.850.352 bytes).
+    - `releases/CYD2.8-BLE-b17-161026_1546_full.bin` (1.981.424 bytes).
+
+
+
 
 

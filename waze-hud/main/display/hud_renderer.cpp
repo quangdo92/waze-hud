@@ -962,11 +962,7 @@ void HudRenderer::render(const HudState &state, const DeviceSettings &settings,
     }
     const int availableStreetWidth = hasEta ? std::max(60, layout::Width - etaW - 16) : 304;
     char streetDisplayBuf[180]{};
-    if (state.navigationActive) {
-        std::snprintf(streetDisplayBuf, sizeof(streetDisplayBuf), "HT: %s", displayStreet(state));
-    } else {
-        std::snprintf(streetDisplayBuf, sizeof(streetDisplayBuf), "%s", displayStreet(state));
-    }
+    std::snprintf(streetDisplayBuf, sizeof(streetDisplayBuf), "HT: %s", displayStreet(state));
     const int streetWidth = metrics.fontTextWidth(streetDisplayBuf, assets::kTextMedium);
     const bool shouldMarquee = state.connected && state.hasProducerState &&
                                streetWidth > availableStreetWidth;
@@ -1251,30 +1247,10 @@ void HudRenderer::renderMainIndicators(Canvas &canvas, const Rect &region,
     // Battery is centered across the upper HUD. It is omitted entirely when
     // GPIO4 does not contain a plausible single-cell LiPo voltage.
 #if CONFIG_WAZE_HUD_DISPLAY_CYD_28
-    if (systemStatus.batteryPresent && sameRegion(region, layout::Alerts)) {
-        constexpr int batteryX = 196 + 4;
-        constexpr int batteryY = 4;
-        constexpr int batteryWidth = 16;
-        constexpr int batteryHeight = 9;
-        const uint16_t batteryColor = systemStatus.batteryPercent <= 15 ? colors::Red
-            : systemStatus.batteryPercent <= 35 ? colors::Amber : colors::Green;
-        canvas.fillRect(batteryX - region.x, batteryY - region.y,
-                        batteryWidth, batteryHeight, batteryColor);
-        canvas.fillRect(batteryX + 1 - region.x, batteryY + 1 - region.y,
-                        batteryWidth - 2, batteryHeight - 2, colors::Background);
-        canvas.fillRect(batteryX + batteryWidth - region.x, batteryY + 2 - region.y,
-                        2, batteryHeight - 4, batteryColor);
-        const int fillWidth = (batteryWidth - 4) * systemStatus.batteryPercent / 100;
-        if (fillWidth > 0) {
-            canvas.fillRect(batteryX + 2 - region.x, batteryY + 2 - region.y,
-                            fillWidth, batteryHeight - 4, batteryColor);
-        }
-        char percent[8];
-        std::snprintf(percent, sizeof(percent), "%u%%",
-                      static_cast<unsigned>(systemStatus.batteryPercent));
-        canvas.fontText(batteryX + batteryWidth + 4 - region.x, 1 - region.y, percent, assets::kTextSmall,
-                        batteryColor, 32, false);
-    }
+    // CYD 2.8 runs on direct 5V USB power; battery indicator omitted
+    (void)canvas;
+    (void)region;
+    (void)systemStatus;
 #else
     if (systemStatus.batteryPresent && sameRegion(region, layout::SpeedCluster)) {
         constexpr int batteryX = 134;
@@ -1611,12 +1587,16 @@ void HudRenderer::renderMainCluster(Canvas &canvas, const HudState &state,
             const int month = std::clamp(tmVal.tm_mon + 1, 1, 12);
             const int mday = std::clamp(tmVal.tm_mday, 1, 31);
 
-            char dayDateStr[48];
-            std::snprintf(dayDateStr, sizeof(dayDateStr), "%s %02d/%02d/%02d", dayStr, mday, month, year % 100);
+            char dateBuf[24];
+            std::snprintf(dateBuf, sizeof(dateBuf), "%02d/%02d/%04d", mday, month, year);
 
             constexpr int bannerH = 20;
             canvas.fillRect(0, 0, canvas.width(), bannerH, colors::Panel);
-            canvas.fontText(0, 1, dayDateStr, assets::kTextMedium, colors::Cyan, canvas.width(), true);
+            canvas.fontText(6, 1, dayStr, assets::kTextMedium, colors::Cyan, -1, false);
+
+            const int dateWidth = canvas.fontTextWidth(dateBuf, assets::kTextMedium);
+            const int dateX = (layout::Width - dateWidth) / 2;
+            canvas.fontText(dateX, 1, dateBuf, assets::kTextMedium, colors::White, -1, false);
         }
     } else {
         drawManeuverIcon(canvas, state.maneuver, state.roundaboutExit, colors::White);
@@ -1636,15 +1616,15 @@ void HudRenderer::renderMainCluster(Canvas &canvas, const HudState &state,
     // 3. Phía bên phải (Cụm tốc độ):
     // Biển giới hạn tốc độ to cực đại (radius 60/50, tâm x=135, y=80) nằm từ x=75..195, y=20..140
     constexpr int signX = 135;
-    constexpr int signY = 80;
-    constexpr int outerRadius = 60;
-    constexpr int innerRadius = 50;
+    constexpr int signY = 82;
+    constexpr int outerRadius = 58;
+    constexpr int innerRadius = 49;
 
     constexpr int badgeW = 38;
     constexpr int badgeH = 28;
-    // Cạnh ngoài của badge trùng khít cạnh ô vuông bao quanh biển báo (x = signX + outerRadius = 195)
-    constexpr int badgeX = signX + outerRadius - badgeW; // 157
-    constexpr int badgeY = 142 - badgeH - 4; // 110
+    // Cạnh ngoài của badge trùng khít cạnh ô vuông bao quanh biển báo (x = signX + outerRadius = 193)
+    constexpr int badgeX = signX + outerRadius - badgeW; // 155
+    constexpr int badgeY = 142 - badgeH - 2; // 112
 
     // Kiểm tra chế độ ban đêm: Tuân theo Giao diện (Theme) từ cấu hình hoặc giờ tự động
     bool isNight = false;
@@ -1843,13 +1823,29 @@ void HudRenderer::renderAlerts(Canvas &canvas, const HudState &state, const Devi
         const int64_t millis = localClockMillis(state);
         const int64_t second = millis == INT64_MIN ? INT64_MIN : millis / 1000LL;
         if (second != INT64_MIN) {
+#if CONFIG_WAZE_HUD_DISPLAY_CYD_28
+            if (!state.navigationActive) {
+                canvas.fillRect(0, 0, canvas.width(), 20, colors::Panel);
+                const time_t localSec = static_cast<time_t>(millis / 1000LL);
+                struct tm tmVal{};
+                gmtime_r(&localSec, &tmVal);
+                const int year = std::clamp(tmVal.tm_year + 1900, 2000, 2099);
+                const int month = std::clamp(tmVal.tm_mon + 1, 1, 12);
+                const int mday = std::clamp(tmVal.tm_mday, 1, 31);
+                char dateBuf[24];
+                std::snprintf(dateBuf, sizeof(dateBuf), "%02d/%02d/%04d", mday, month, year);
+                const int dateWidth = canvas.fontTextWidth(dateBuf, assets::kTextMedium);
+                const int dateX = (layout::Width - dateWidth) / 2;
+                canvas.fontText(dateX - 196, 1, dateBuf, assets::kTextMedium, colors::White, -1, false);
+            }
+#endif
             const int64_t minute = second / 60;
             const int normalizedMinute = static_cast<int>((minute % 1440 + 1440) % 1440);
             char clock[8];
             std::snprintf(clock, sizeof(clock), "%02d:%02d",
                           normalizedMinute / 60, normalizedMinute % 60);
             const int clockWidth = canvas.fontTextWidth(clock, assets::kTextMedium);
-            const int clockX = canvas.width() - clockWidth - 2;
+            const int clockX = canvas.width() - clockWidth - 4;
             canvas.fontText(clockX, 1, clock, assets::kTextMedium, colors::White, -1, false);
         }
     };
@@ -2160,11 +2156,7 @@ void HudRenderer::renderStreet(Canvas &canvas, const HudState &state, const Devi
     canvas.clear(colors::Panel);
     const int textY = std::max(0, (layout::StreetHeight - assets::kTextMedium.lineHeight) / 2);
     char streetBuf[180]{};
-    if (state.navigationActive) {
-        std::snprintf(streetBuf, sizeof(streetBuf), "HT: %s", displayStreet(state));
-    } else {
-        std::snprintf(streetBuf, sizeof(streetBuf), "%s", displayStreet(state));
-    }
+    std::snprintf(streetBuf, sizeof(streetBuf), "HT: %s", displayStreet(state));
 
     const bool hasEta = state.navigationActive && state.eta[0] != 0;
     char etaBuf[16]{};
@@ -2179,13 +2171,8 @@ void HudRenderer::renderStreet(Canvas &canvas, const HudState &state, const Devi
         canvas.fontText(8 - marqueeOffset_, textY, streetBuf, assets::kTextMedium,
                         colors::White, availableWidth, false);
     } else {
-        if (state.navigationActive) {
-            canvas.fontText(8, textY, streetBuf, assets::kTextMedium, colors::White,
-                            availableWidth, false);
-        } else {
-            canvas.fontText(5, textY, streetBuf, assets::kTextMedium, colors::White,
-                            310, true);
-        }
+        canvas.fontText(8, textY, streetBuf, assets::kTextMedium, colors::White,
+                        availableWidth, false);
     }
 
     if (hasEta) {

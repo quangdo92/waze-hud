@@ -56,10 +56,16 @@ Dự án WazeHUD tối ưu cho màn hình ESP32-2432S028 (CYD 2.8 inch). Toàn b
 - **Khắc phục giao cắt đồng hồ & vòng severity:** Đưa đồng hồ lên `clockY = 1` và vẽ sau cùng (overlay priority); thu gọn vòng severity biển 2 tầng thành $R = 18$ dày 1px, đảm bảo khoảng cách an toàn 4px so với đồng hồ, triệt tiêu 100% hiện tượng xước/mất nét số giờ.
 - **Hệ tọa độ dọc đồng bộ 4 scanlines clearance:** Đặt biển chính $y = 35$, số mét $y = 53$, nhãn kẹt xe $y = 68$, icon phụ $y = 102$, số mét phụ $y = 121$. Mọi tầng hiển thị đều có khoảng trống an toàn $\ge 4\text{ px}$.
 
+### 🎨 Tinh Chỉnh Cân Đối Bố Cục Chạy Tự Do & Hạ Biển Báo Giới Hạn Tốc Độ
+- **Header chạy tự do cân đối 3 phần:** Thứ căn trái (`kTextMedium`, Cyan), Ngày tháng năm căn giữa (`dd/mm/yyyy`, Trắng), Giờ phút căn phải (`hh:mm`, Trắng) trải đều toàn bộ chiều rộng 320 px.
+- **Thanh đường hiện tại:** Luôn thêm tiền tố `"HT: "` và căn lề trái tại $x = 8$, tự động trượt chữ marquee nếu tên đường dài.
+- **Cân đối khoảng hở biển báo:** Tinh chỉnh bán kính biển báo $R = 58\text{ px}$, tâm `signY = 82`, ô tốc độ `badgeY = 112`, tạo khoảng hở thoáng đãng 4px so với đường tiếp theo ở trên và phẳng hàng ngang cách 2px với đường hiện tại ở dưới.
+- **Lược bỏ pin:** Loại bỏ hoàn toàn khối vẽ pin trên CYD 2.8" (do thiết bị dùng nguồn 5V USB trực tiếp trên xe).
+
 ### 📦 Danh Mục Firmware Đóng Gói Bản Build 17
 Toàn bộ file firmware phát hành được lưu trữ tại thư mục [`releases/`](file:///d:/waze-hud-CYD2.8-V2USB/releases):
-- **`CYD2.8-BLE-b17-151026_1405_full.bin`** (1.981.344 bytes): Bản Factory Full Flash nạp qua cáp USB trên máy tính từ offset duy nhất `0x0`.
-- **`CYD2.8-BLE-b17-151026_1405_app.bin`** (1.850.272 bytes): Bản WiFi Web OTA nạp không dây trực tiếp từ trình duyệt điện thoại (`0xE9` header).
+- **`CYD2.8-BLE-b17-161026_1546_full.bin`** (1.981.424 bytes): Bản Factory Full Flash nạp qua cáp USB trên máy tính từ offset duy nhất `0x0`.
+- **`CYD2.8-BLE-b17-161026_1546_app.bin`** (1.850.352 bytes): Bản WiFi Web OTA nạp không dây trực tiếp từ trình duyệt điện thoại (`0xE9` header).
 
 ---
 
